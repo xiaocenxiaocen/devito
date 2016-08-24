@@ -18,8 +18,9 @@ class Compiler(GCCToolchain):
 
     :param openmp: Boolean indicating if openmp is enabled. False by default
 
-    The base class defaults all compiler specific settings to empty lists. Preset configurations
-    can be built by inheriting from `Compiler` and setting specific flags to the desired values, eg.:
+    The base class defaults all compiler specific settings to empty lists.
+    Preset configurations can be built by inheriting from `Compiler` and setting
+    specific flags to the desired values, eg.:
 
     def class MyCompiler(Compiler):
         def __init__(self):
@@ -52,7 +53,7 @@ class Compiler(GCCToolchain):
         self.openmp = openmp
         self.pragma_ivdep = [Pragma('ivdep')]
         self.pragma_nontemporal = []
-        self.pragma_aligned = []
+        self.pragma_aligned = "omp simd aligned"
 
     def __str__(self):
         return self.__class__.__name__

@@ -1,6 +1,7 @@
 import atexit
 import os
 import sys
+import weakref
 from signal import SIGABRT, SIGINT, SIGSEGV, SIGTERM, signal
 from tempfile import gettempdir
 
@@ -72,7 +73,7 @@ class SymbolicData(Function):
     def __init__(self):
         """Initialise from a cached instance by shallow copying __dict__."""
         original = _SymbolCache[self.__class__]
-        self.__dict__ = original.__dict__.copy()
+        self.__dict__ = original().__dict__.copy()
 
     @classmethod
     def _cached(cls):
@@ -85,16 +86,18 @@ class SymbolicData(Function):
 
         :param obj: Object to be cached.
         """
-        _SymbolCache[cls] = obj
+        _SymbolCache[cls] = weakref.ref(obj)
 
     @classmethod
     def indices(cls, shape):
         """Abstract class method to determine the default dimension indices.
 
         :param shape: Given shape of the data.
-        :raises NotImplementedError: 'Abstract class `SymbolicData` does not have default indices'.
+        :raises NotImplementedError: 'Abstract class `SymbolicData` does not have
+        default indices'.
         """
-        raise NotImplementedError('Abstract class `SymbolicData` does not have default indices')
+        raise NotImplementedError('Abstract class'
+                                  ' `SymbolicData` does not have default indices')
 
 
 class DenseData(SymbolicData):
@@ -165,9 +168,11 @@ class DenseData(SymbolicData):
         Note: memmap is a subclass of ndarray.
         """
         if self.memmap:
-            self._data = np.memmap(filename=self.f, dtype=self.dtype, mode='w+', shape=self.shape, order='C')
+            self._data = np.memmap(filename=self.f, dtype=self.dtype, mode='w+',
+                                   shape=self.shape, order='C')
         else:
-            self._data = aligned(np.zeros(self.shape, self.dtype, order='C'), alignment=64)
+            self._data = aligned(np.zeros(self.shape, self.dtype, order='C'),
+                                 alignment=64)
 
     @property
     def data(self):
