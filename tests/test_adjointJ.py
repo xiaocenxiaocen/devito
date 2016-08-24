@@ -3,7 +3,7 @@ import pytest
 
 from examples.Acoustic_codegen import Acoustic_cg
 from examples.containers import IGrid, IShot
-
+from devito import clear_cache
 
 class TestAdjointJ(object):
     @pytest.fixture(params=[(60, 70), (60, 70, 80)])
@@ -80,6 +80,7 @@ class TestAdjointJ(object):
         return request.param
 
     def test_adjoint(self, acoustic):
+        clear_cache()
         rec0, u0 = acoustic[0].Forward(save=True)
         rec = acoustic[0].Born(acoustic[1])
         grad = acoustic[0].Gradient(rec0, u0)

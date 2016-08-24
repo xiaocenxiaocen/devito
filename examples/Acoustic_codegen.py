@@ -82,6 +82,20 @@ class Acoustic_cg:
         u, rec = fw.apply()
         return rec.data, u
 
+    def Apply_A(self):
+        A = AOperator(self.model, self.src, self.damp, self.data,
+                             time_order=self.t_order, spc_order=self.s_order,
+                             save=True)
+        q = A.apply()
+        return q
+
+    def Apply_A_adj(self):
+        A = AadjOperator(self.model, self.src, self.damp, self.data,
+                            time_order=self.t_order, spc_order=self.s_order,
+                            save=True)
+        q = A.apply()
+        return q
+
     def Adjoint(self, rec, cache_blocking=None):
         adj = AdjointOperator(self.model, self.damp, self.data, rec,
                               time_order=self.t_order, spc_order=self.s_order,
@@ -89,7 +103,6 @@ class Acoustic_cg:
         v = adj.apply()[0]
         return v.data
 
-    def Gradient(self, rec, u, cache_blocking=None):
     def Forward_dipole(self, qx, qy, qz=None, save=False):
         fw = ForwardOperatorD(self.model, self.damp, self.data, qx, qy, qz,
                               time_order=self.t_order, spc_order=self.s_order,
@@ -103,7 +116,7 @@ class Acoustic_cg:
         v = adj.apply()[0]
         return v.data
 
-    def Gradient(self, rec, u):
+    def Gradient(self, rec, u, cache_blocking=None):
         grad_op = GradientOperator(self.model, self.damp, self.data, rec, u,
                                    time_order=self.t_order, spc_order=self.s_order,
                                    cache_blocking=cache_blocking)
