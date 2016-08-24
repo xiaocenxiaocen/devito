@@ -1,12 +1,12 @@
 import numpy as np
 import pytest
-from numpy import linalg
 
+from devito import clear_cache
 from examples.Acoustic_codegen import Acoustic_cg
 from examples.containers import IGrid, IShot
 
 
-class TestAdjointA(object):
+class TestAdjointAa(object):
     @pytest.fixture(params=[(60, 70), (60, 70, 80)])
     def acoustic(self, request, time_order, space_order):
         model = IGrid()
@@ -64,27 +64,20 @@ class TestAdjointA(object):
     def space_order(self, request):
         return request.param
 
-    @pytest.fixture
-    def forward(self, acoustic):
-        rec, u = acoustic.Forward(save=False)
-        return rec
-
-    def test_adjoint(self, acoustic, forward):
-        rec = forward
-        srca = acoustic.Adjoint(rec)
-        nt = srca.shape[0]
+    def test_adjoint(self, acoustic):
+        clear_cache()
+        rec, u = acoustic.Forward(save=True)
+        q = acoustic.Apply_A(u)
+        qa = acoustic.Apply_A_adj(q)
         # Actual adjoint test
-        term1 = 0
-        for ti in range(0, nt):
-            term1 = term1 + srca[ti] * acoustic.data.get_source(ti)
-        term2 = linalg.norm(rec)**2
+        term1 = np.linalg.norm(q.data)**2
+        term2 = np.dot(u.data.reshape(-1), qa.data.reshape(-1))
         print(term1, term2, term1 - term2, term1 / term2)
         assert np.isclose(term1 / term2, 1.0, atol=0.001)
 
 if __name__ == "__main__":
-    t = TestAdjointA()
+    t = TestAdjointAa()
     request = type('', (), {})()
-    request.param = (60, 70, 80)
-    ac = t.acoustic(request, 2, 12)
-    fw = t.forward(ac)
-    t.test_adjoint(ac, fw)
+    request.param = (60, 70)
+    ac = t.acoustic(request, 2, 2)
+    t.test_adjoint(ac)
