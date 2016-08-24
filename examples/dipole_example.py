@@ -35,8 +35,8 @@ data.set_receiver_pos(receiver_coords)
 data.set_shape(nt, 101)
 # Full domain sources
 qx = TimeData(name="qx", shape=model.get_shape_comp(), time_dim=nt,
-             time_order=2, space_order=spc_order, save=True,
-             dtype=np.float32, pad_time=True)
+              time_order=2, space_order=spc_order, save=True,
+              dtype=np.float32, pad_time=True)
 qy = TimeData(name="qy", shape=model.get_shape_comp(), time_dim=nt,
               time_order=2, space_order=spc_order, save=True,
               dtype=np.float32, pad_time=True)

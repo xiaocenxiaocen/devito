@@ -95,7 +95,7 @@ class Acoustic_cg:
 
     def Adjoint_dipole(self, rec):
         adj = AdjointOperatorD(self.model, self.damp, self.data, rec,
-                              time_order=self.t_order, spc_order=self.s_order)
+                               time_order=self.t_order, spc_order=self.s_order)
         v = adj.apply()[0]
         return v.data
 

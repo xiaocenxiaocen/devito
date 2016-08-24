@@ -4,7 +4,7 @@ import numpy as np
 
 class IGrid:
     def __init__(self, *args, **kwargs):
-        self.nbpml = 40
+        self.nbpml = kwargs.get('nbpml', 40)
 
     def get_shape(self):
         """Tuple of (x, y) or (x, y, z)
