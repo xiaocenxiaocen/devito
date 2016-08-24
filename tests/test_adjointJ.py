@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-from numpy import linalg
 
 from examples.Acoustic_codegen import Acoustic_cg
 from examples.containers import IGrid, IShot
@@ -9,7 +8,6 @@ from examples.containers import IGrid, IShot
 class TestAdjointJ(object):
     @pytest.fixture(params=[(60, 70), (60, 70, 80)])
     def acoustic(self, request, time_order, space_order):
-        model = IGrid(nbpml=10)
         model0 = IGrid(nbpml=10)
         dimensions = request.param
         # dimensions are (x,z) and (x, y, z)
@@ -36,9 +34,8 @@ class TestAdjointJ(object):
         # Smooth velocity
         initial_vp = smooth10(true_vp)
         dm = true_vp**-2 - initial_vp**-2
-        model.create_model(origin, spacing, true_vp)
         model0.create_model(origin, spacing, initial_vp)
-        dmpad = model.pad(dm)
+        dmpad = model0.pad(dm)
         # Define seismic data.
         data = IShot()
 
@@ -67,7 +64,6 @@ class TestAdjointJ(object):
         data.set_receiver_pos(receiver_coords)
         data.set_shape(nt, 50)
         # Adjoint test
-        wave_true = Acoustic_cg(model, data, t_order=time_order, s_order=space_order, nbpml=10)
         wave_0 = Acoustic_cg(model0, data, None, t_order=time_order, s_order=space_order, nbpml=10)
         return wave_0, dm, dmpad
 

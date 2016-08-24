@@ -47,5 +47,3 @@ qz = TimeData(name="qz", shape=model.get_shape_comp(), time_dim=nt,
 Acoustic = Acoustic_cg(model, data, s_order=spc_order)
 print("Applying forward")
 (rec, u) = Acoustic.Forward_dipole(qx, qy, qz)
-print("Applying adjoint")
-Qa = Acoustic.Adjoint_dipole(rec)
