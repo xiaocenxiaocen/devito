@@ -1,9 +1,10 @@
 import numpy as np
 import pytest
 
+from devito import clear_cache
 from examples.Acoustic_codegen import Acoustic_cg
 from examples.containers import IGrid, IShot
-from devito import clear_cache
+
 
 class TestAdjointJ(object):
     @pytest.fixture(params=[(60, 70), (60, 70, 80)])

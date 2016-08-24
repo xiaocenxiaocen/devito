@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 from numpy import linalg
 
+from devito import clear_cache
 from examples.Acoustic_codegen import Acoustic_cg
 from examples.containers import IGrid, IShot
 
@@ -82,6 +83,7 @@ class TestGradient(object):
         return request.param
 
     def test_grad(self, acoustic):
+        clear_cache()
         rec = acoustic[0].Forward()[0]
         rec0, u0 = acoustic[1].Forward(save=True)
         F0 = .5*linalg.norm(rec0 - rec)**2

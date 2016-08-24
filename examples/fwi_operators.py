@@ -170,22 +170,13 @@ class AOperator(Operator):
         s, h = symbols('s h')
         subs = {s: dt, h: model.get_spacing()}
         super(AOperator, self).__init__(nt, m.shape,
-                                              stencils=Eq(u.forward, stencil),
-                                              subs=subs,
-                                              spc_border=spc_order/2,
-                                              time_order=time_order,
-                                              forward=True,
-                                              dtype=m.dtype,
-                                              **kwargs)
-
-        # Insert source and receiver terms post-hoc
-        self.input_params += [src, src.coordinates, rec, rec.coordinates]
-        self.output_params += [rec]
-        self.propagator.time_loop_stencils_a = src.add(m, u) + rec.read(u)
-        self.propagator.add_devito_param(src)
-        self.propagator.add_devito_param(src.coordinates)
-        self.propagator.add_devito_param(rec)
-        self.propagator.add_devito_param(rec.coordinates)
+                                        stencils=Eq(u.forward, stencil),
+                                        subs=subs,
+                                        spc_border=spc_order/2,
+                                        time_order=time_order,
+                                        forward=True,
+                                        dtype=m.dtype,
+                                        **kwargs)
 
 
 class AdjointOperator(Operator):
@@ -257,14 +248,14 @@ class AadjOperator(Operator):
         # Add substitutions for spacing (temporal and spatial)
         s, h = symbols('s h')
         subs = {s: model.get_critical_dt(), h: model.get_spacing()}
-        super(AdjOperator, self).__init__(nt, m.shape,
-                                              stencils=Eq(v.backward, stencil),
-                                              subs=subs,
-                                              spc_border=spc_order/2,
-                                              time_order=time_order,
-                                              forward=False,
-                                              dtype=m.dtype,
-                                              **kwargs)
+        super(AadjOperator, self).__init__(nt, m.shape,
+                                           stencils=Eq(v.backward, stencil),
+                                           subs=subs,
+                                           spc_border=spc_order/2,
+                                           time_order=time_order,
+                                           forward=False,
+                                           dtype=m.dtype,
+                                           **kwargs)
 
         # Insert source and receiver terms post-hoc
         self.input_params += [srca, srca.coordinates, rec, rec.coordinates]
