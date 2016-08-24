@@ -171,12 +171,12 @@ class AOperator(Operator):
         # Add substitutions for spacing (temporal and spatial)
         s, h = symbols('s h')
         subs = {s: dt, h: model.get_spacing()}
-        super(AOperator, self).__init__(u.shape[0]-3, m.shape,
+        super(AOperator, self).__init__(u.shape[0]-2, m.shape,
                                         stencils=Eq(q.forward, eqn),
                                         subs=subs,
                                         spc_border=spc_order/2,
                                         time_order=time_order,
-                                        forward=False,
+                                        forward=True,
                                         dtype=m.dtype,
                                         **kwargs)
 
@@ -235,16 +235,16 @@ class AadjOperator(Operator):
         u.pad_time = True
         # Derive stencil from symbolic equation
         eqn = m * v.dt2 - v.laplace - damp * v.dt
-        stencil = Eq(u, eqn)
+        stencil = Eq(u.backward, eqn)
         # Add substitutions for spacing (temporal and spatial)
         s, h = symbols('s h')
         subs = {s: model.get_critical_dt(), h: model.get_spacing()}
-        super(AadjOperator, self).__init__(v.shape[0]-3, m.shape,
+        super(AadjOperator, self).__init__(v.shape[0]-4, m.shape,
                                            stencils=stencil,
                                            subs=subs,
                                            spc_border=spc_order/2,
                                            time_order=time_order,
-                                           forward=True,
+                                           forward=False,
                                            dtype=m.dtype,
                                            **kwargs)
 
