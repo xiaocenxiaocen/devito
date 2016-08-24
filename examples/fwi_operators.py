@@ -158,24 +158,26 @@ class ForwardOperator(Operator):
 
 
 class AOperator(Operator):
-    def __init__(self, model, u, damp, data, time_order=2, spc_order=6,
-                 save=False, **kwargs):
-        nrec, nt = data.traces.shape
+    def __init__(self, model, u, damp, time_order=2, spc_order=6,
+                 **kwargs):
         dt = model.get_critical_dt()
+        q = TimeData(name="q", shape=model.get_shape_comp(), time_dim=u.shape[0]-2,
+                     time_order=time_order, space_order=spc_order, save=True,
+                     dtype=damp.dtype)
+        q.pad_time = True
         m = DenseData(name="m", shape=model.get_shape_comp(), dtype=damp.dtype)
         m.data[:] = model.padm()
-        u.pad_time = save
         # Derive stencil from symbolic equation
-        stencil = m * u.dt2 - u.laplace + damp * u.dt
+        eqn = m * u.dt2 - u.laplace + damp * u.dt
         # Add substitutions for spacing (temporal and spatial)
         s, h = symbols('s h')
         subs = {s: dt, h: model.get_spacing()}
-        super(AOperator, self).__init__(nt, m.shape,
-                                        stencils=Eq(u.forward, stencil),
+        super(AOperator, self).__init__(u.shape[0]-3, m.shape,
+                                        stencils=Eq(q.forward, eqn),
                                         subs=subs,
                                         spc_border=spc_order/2,
                                         time_order=time_order,
-                                        forward=True,
+                                        forward=False,
                                         dtype=m.dtype,
                                         **kwargs)
 
@@ -225,47 +227,27 @@ class AdjointOperator(Operator):
 
 
 class AadjOperator(Operator):
-    def __init__(self, model, damp, data, recin, time_order=2, spc_order=6, **kwargs):
-        nrec, nt = data.traces.shape
-        dt = model.get_critical_dt()
-        v = TimeData(name="v", shape=model.get_shape_comp(), time_dim=nt,
-                     time_order=time_order, space_order=spc_order,
-                     save=False, dtype=damp.dtype)
+    def __init__(self, model, v, damp, time_order=2, spc_order=6, **kwargs):
         m = DenseData(name="m", shape=model.get_shape_comp(), dtype=damp.dtype)
         m.data[:] = model.padm()
-        v.pad_time = False
-        srca = SourceLike(name="srca", npoint=1, nt=nt, dt=dt, h=model.get_spacing(),
-                          coordinates=np.array(data.source_coords,
-                                               dtype=damp.dtype)[np.newaxis, :],
-                          ndim=len(damp.shape), dtype=damp.dtype, nbpml=model.nbpml)
-        rec = SourceLike(name="rec", npoint=nrec, nt=nt, dt=dt, h=model.get_spacing(),
-                         coordinates=data.receiver_coords, ndim=len(damp.shape),
-                         dtype=damp.dtype, nbpml=model.nbpml)
-        rec.data[:] = recin[:]
+        u = TimeData(name="u", shape=model.get_shape_comp(), time_dim=v.shape[0]-2,
+                     time_order=time_order, space_order=spc_order,
+                     save=True, dtype=damp.dtype)
+        u.pad_time = True
         # Derive stencil from symbolic equation
         eqn = m * v.dt2 - v.laplace - damp * v.dt
-        stencil = solve(eqn, v.backward)[0]
-
+        stencil = Eq(u, eqn)
         # Add substitutions for spacing (temporal and spatial)
         s, h = symbols('s h')
         subs = {s: model.get_critical_dt(), h: model.get_spacing()}
-        super(AadjOperator, self).__init__(nt, m.shape,
-                                           stencils=Eq(v.backward, stencil),
+        super(AadjOperator, self).__init__(v.shape[0]-3, m.shape,
+                                           stencils=stencil,
                                            subs=subs,
                                            spc_border=spc_order/2,
                                            time_order=time_order,
-                                           forward=False,
+                                           forward=True,
                                            dtype=m.dtype,
                                            **kwargs)
-
-        # Insert source and receiver terms post-hoc
-        self.input_params += [srca, srca.coordinates, rec, rec.coordinates]
-        self.propagator.time_loop_stencils_a = rec.add(m, v) + srca.read(v)
-        self.output_params = [srca]
-        self.propagator.add_devito_param(srca)
-        self.propagator.add_devito_param(srca.coordinates)
-        self.propagator.add_devito_param(rec)
-        self.propagator.add_devito_param(rec.coordinates)
 
 
 class GradientOperator(Operator):
