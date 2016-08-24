@@ -6,7 +6,7 @@ from examples.Acoustic_codegen import Acoustic_cg
 from examples.containers import IGrid, IShot
 
 
-class TestAdjointAa(object):
+class TestAdjointA(object):
     @pytest.fixture(params=[(60, 70), (60, 70, 80)])
     def acoustic(self, request, time_order, space_order):
         model = IGrid()
@@ -76,7 +76,7 @@ class TestAdjointAa(object):
         assert np.isclose(term1 / term2, 1.0, atol=0.001)
 
 if __name__ == "__main__":
-    t = TestAdjointAa()
+    t = TestAdjointA()
     request = type('', (), {})()
     request.param = (60, 70)
     ac = t.acoustic(request, 2, 2)
