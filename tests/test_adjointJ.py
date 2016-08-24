@@ -40,7 +40,7 @@ class TestAdjointJ(object):
         data = IShot()
 
         f0 = .010
-        dt = model.get_critical_dt()
+        dt = model0.get_critical_dt()
         t0 = 0.0
         tn = 1000.0
         nt = int(1+(tn-t0)/dt)
