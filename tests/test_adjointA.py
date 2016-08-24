@@ -70,10 +70,14 @@ class TestAdjointA(object):
         q = acoustic.Apply_A(u)
         qa = acoustic.Apply_A_adj(q)
         # Actual adjoint test
+        src1 = np.linalg.norm(acoustic.src.data)
+        src2 = np.linalg.norm(q.data)
         term1 = np.linalg.norm(q.data)**2
         term2 = np.dot(u.data.reshape(-1), qa.data.reshape(-1))
         print(term1, term2, term1 - term2, term1 / term2)
         assert np.isclose(term1 / term2, 1.0, atol=0.001)
+        print(src1, src2, src1 - src2, src1 / src2)
+        assert np.isclose(src1 / src2, 1.0, atol=0.001)
 
 if __name__ == "__main__":
     t = TestAdjointA()
