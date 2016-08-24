@@ -3,7 +3,7 @@ import numpy as np
 from Acoustic_codegen import Acoustic_cg
 from containers import IGrid, IShot
 
-dimensions = (50, 50, 50)
+dimensions = (50, 50)
 model = IGrid()
 model0 = IGrid()
 model1 = IGrid()
@@ -21,17 +21,17 @@ spc_order = 2
 def smooth10(vel, shape):
     out = np.ones(shape)
     out[:, :] = vel[:, :]
-    nx = shape[0]
+    nx = shape[1]
 
     for a in range(5, nx-6):
-        out[a, :] = np.sum(vel[a - 5:a + 5, :], axis=0) / 10
+        out[:, a] = np.sum(vel[:, a - 5:a + 5], axis=1) / 10
 
     return out
 
 
 # True velocity
 true_vp = np.ones(dimensions) + 2.0
-true_vp[:, :, int(dimensions[0] / 2):int(dimensions[0])] = 4.5
+true_vp[:, int(dimensions[0] / 2):int(dimensions[0])] = 4.5
 
 # Smooth velocity
 initial_vp = smooth10(true_vp, dimensions)
@@ -61,14 +61,14 @@ def source(t, f0):
 
 
 time_series = source(np.linspace(t0, tn, nt), f0)
-location = (origin[0] + dimensions[0] * spacing[0] * 0.5, 500,
+location = (origin[0] + dimensions[0] * spacing[0] * 0.5,
             origin[1] + 2 * spacing[1])
 data.set_source(time_series, dt, location)
 
-receiver_coords = np.zeros((101, 3))
+receiver_coords = np.zeros((101, 2))
 receiver_coords[:, 0] = np.linspace(50, 950, num=101)
-receiver_coords[:, 1] = 500
-receiver_coords[:, 2] = location[2]
+# receiver_coords[:, 1] = 500
+receiver_coords[:, 1] = location[1]
 data.set_receiver_pos(receiver_coords)
 data.set_shape(nt, 101)
 Acoustic = Acoustic_cg(model, data)

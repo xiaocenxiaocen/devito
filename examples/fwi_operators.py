@@ -80,7 +80,7 @@ class SourceLike(PointData):
                       for x, idx in zip(self.sym_coordinates,
                                         self.sym_coord_indices)])
 
-    def point2grid(self, u, m, t=t):
+    def point2grid(self, u, m, t):
         """Generates an expression for generic point-to-grid interpolation"""
         dt = self.dt
         subs = dict(zip(self.rs, self.sym_coord_bases))
@@ -261,9 +261,9 @@ class BornOperator(Operator):
                          dtype=damp.dtype, nbpml=model.nbpml)
 
         # Derive stencils from symbolic equation
-        first_eqn = m * u.dt2 - u.laplace - damp * u.dt
+        first_eqn = m * u.dt2 - u.laplace + damp * u.dt
         first_stencil = solve(first_eqn, u.forward)[0]
-        second_eqn = m * U.dt2 - U.laplace - damp * U.dt
+        second_eqn = m * U.dt2 - U.laplace + damp * U.dt + dm * u.dt2
         second_stencil = solve(second_eqn, U.forward)[0]
 
         # Add substitutions for spacing (temporal and spatial)
@@ -271,13 +271,10 @@ class BornOperator(Operator):
         subs = {s: src.dt, h: src.h}
 
         # Add Born-specific updates and resets
-        src2 = -(src.dt**-2) * (- 2 * u + u.forward + u.backward) * dm
-        insert_second_source = Eq(U, U + (src.dt * src.dt) / m*src2)
-        stencils = [Eq(u.forward, first_stencil), Eq(U.forward, second_stencil),
-                    insert_second_source]
+        stencils = [Eq(u.forward, first_stencil), Eq(U.forward, second_stencil)]
         super(BornOperator, self).__init__(src.nt, m.shape,
                                            stencils=stencils,
-                                           substitutions=[subs, subs, {}, {}],
+                                           substitutions=[subs, subs],
                                            spc_border=spc_order/2,
                                            time_order=time_order,
                                            forward=True,
@@ -287,7 +284,7 @@ class BornOperator(Operator):
         # Insert source and receiver terms post-hoc
         self.input_params += [dm, src, src.coordinates, rec, rec.coordinates, U]
         self.output_params = [rec]
-        self.propagator.time_loop_stencils_b = src.add(m, u, t - 1)
+        self.propagator.time_loop_stencils_b = src.add(m, u, t-1)
         self.propagator.time_loop_stencils_a = rec.read(U)
         self.propagator.add_devito_param(dm)
         self.propagator.add_devito_param(src)
@@ -320,14 +317,14 @@ class ForwardOperatorD(Operator):
         stencil = solve(eqn, u.forward)[0]
         # Add substitutions for spacing (temporal and spatial)
         subs = {s: dt, h: model.get_spacing()}
-        super(ForwardOperator, self).__init__(nt, m.shape,
-                                              stencils=Eq(u.forward, stencil),
-                                              substitutions=subs,
-                                              spc_border=spc_order/2,
-                                              time_order=time_order,
-                                              forward=True,
-                                              dtype=m.dtype,
-                                              **kwargs)
+        super(ForwardOperatorD, self).__init__(nt, m.shape,
+                                               stencils=Eq(u.forward, stencil),
+                                               substitutions=subs,
+                                               spc_border=spc_order/2,
+                                               time_order=time_order,
+                                               forward=True,
+                                               dtype=m.dtype,
+                                               **kwargs)
 
         # Insert source and receiver terms post-hoc
         self.input_params += [rec, rec.coordinates]
@@ -361,14 +358,14 @@ class AdjointOperatorD(Operator):
         # Add substitutions for spacing (temporal and spatial)
         s, h = symbols('s h')
         subs = {s: model.get_critical_dt(), h: model.get_spacing()}
-        super(AdjointOperator, self).__init__(nt, m.shape,
-                                              stencils=Eq(v.backward, stencil),
-                                              substitutions=subs,
-                                              spc_border=spc_order/2,
-                                              time_order=time_order,
-                                              forward=False,
-                                              dtype=m.dtype,
-                                              **kwargs)
+        super(AdjointOperatorD, self).__init__(nt, m.shape,
+                                               stencils=Eq(v.backward, stencil),
+                                               substitutions=subs,
+                                               spc_border=spc_order/2,
+                                               time_order=time_order,
+                                               forward=False,
+                                               dtype=m.dtype,
+                                               **kwargs)
 
         # Insert source and receiver terms post-hoc
         self.input_params += [srca, srca.coordinates, rec, rec.coordinates]
