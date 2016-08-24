@@ -73,6 +73,20 @@ class Acoustic_cg:
         u, rec = fw.apply()
         return rec.data, u
 
+    def Apply_A(self):
+        A = AOperator(self.model, self.src, self.damp, self.data,
+                             time_order=self.t_order, spc_order=self.s_order,
+                             save=True)
+        q = A.apply()
+        return q
+
+    def Apply_A_adj(self):
+        A = AadjOperator(self.model, self.src, self.damp, self.data,
+                            time_order=self.t_order, spc_order=self.s_order,
+                            save=True)
+        q = A.apply()
+        return q
+
     def Adjoint(self, rec):
         adj = AdjointOperator(self.model, self.damp, self.data, rec,
                               time_order=self.t_order, spc_order=self.s_order)
