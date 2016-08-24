@@ -300,7 +300,8 @@ class BornOperator(Operator):
 
 
 class ForwardOperatorD(Operator):
-    def __init__(self, model, damp, data, qx, qy, qz=None, time_order=2, spc_order=6, save=False, **kwargs):
+    def __init__(self, model, damp, data, qx, qy, qz=None,
+                 time_order=2, spc_order=6, save=False, **kwargs):
         nrec, nt = data.traces.shape
         dt = model.get_critical_dt()
         u = TimeData(name="u", shape=model.get_shape_comp(), time_dim=nt,
@@ -340,7 +341,8 @@ class ForwardOperatorD(Operator):
 
 
 class AdjointOperatorD(Operator):
-    def __init__(self, model, damp, data, recin, time_order=2, spc_order=6, **kwargs):
+    def __init__(self, model, damp, data, recin,
+                 time_order=2, spc_order=6, **kwargs):
         nrec, nt = data.traces.shape
         dt = model.get_critical_dt()
         v = TimeData(name="v", shape=model.get_shape_comp(), time_dim=nt,
@@ -350,7 +352,8 @@ class AdjointOperatorD(Operator):
         m.data[:] = model.padm()
         v.pad_time = False
         srca = SourceLike(name="srca", npoint=1, nt=nt, dt=dt, h=model.get_spacing(),
-                          coordinates=np.array(data.source_coords, dtype=damp.dtype)[np.newaxis, :],
+                          coordinates=np.array(data.source_coords,
+                                               dtype=damp.dtype)[np.newaxis, :],
                           ndim=len(damp.shape), dtype=damp.dtype, nbpml=model.nbpml)
         rec = SourceLike(name="rec", npoint=nrec, nt=nt, dt=dt, h=model.get_spacing(),
                          coordinates=data.receiver_coords, ndim=len(damp.shape),
