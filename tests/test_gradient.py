@@ -119,6 +119,6 @@ class TestGradient(object):
 if __name__ == "__main__":
     t = TestGradient()
     request = type('', (), {})()
-    request.param = (60, 70, 80)
-    ac = t.acoustic(request, 2, 12)
+    request.param = (60, 70)
+    ac = t.acoustic(request, 2, 4)
     t.test_grad(ac)

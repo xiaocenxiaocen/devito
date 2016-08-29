@@ -15,7 +15,7 @@ class Acoustic_cg:
         self.t_order = t_order
         self.s_order = s_order
         self.data = data
-        self.dtype = np.float64
+        self.dtype = np.float32
         self.dt = model.get_critical_dt()
         self.model.nbpml = nbpml
         self.model.set_origin(nbpml)
@@ -82,7 +82,6 @@ class Acoustic_cg:
         u, rec = fw.apply()
         return rec.data, u
 
-    def Adjoint(self, rec, cache_blocking=None):
     def Apply_A(self, u):
         A = AOperator(self.model, u, self.damp,
                       time_order=self.t_order, spc_order=self.s_order)
@@ -95,7 +94,7 @@ class Acoustic_cg:
         u = A.apply()[0]
         return u
 
-    def Adjoint(self, rec):
+    def Adjoint(self, rec, cache_blocking=None):
         adj = AdjointOperator(self.model, self.damp, self.data, rec,
                               time_order=self.t_order, spc_order=self.s_order,
                               cache_blocking=cache_blocking)
