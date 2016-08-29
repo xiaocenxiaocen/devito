@@ -4,18 +4,20 @@ from os import path
 from random import randint
 
 import numpy as np
-from sympy import Indexed, IndexedBase, symbols
-from sympy.abc import t, x, y, z
+from sympy import Indexed, IndexedBase, preorder_traversal, symbols
 from sympy.utilities.iterables import postorder_traversal
 
 import cgen_wrapper as cgen
 from codeprinter import ccode
 from devito.compiler import (IntelMICCompiler, get_compiler_from_env,
                              get_tmp_dir, jit_compile_and_load)
+from devito.dimension import t, x, y, z
+from devito.expression import Expression
 from devito.function_manager import FunctionDescriptor, FunctionManager
 from devito.iteration import Iteration
+from devito.logger import logger
 from devito.profiler import Profiler
-from tools import flatten
+from tools import flatten, get_optimal_block_size
 
 
 class Propagator(object):
@@ -37,24 +39,29 @@ class Propagator(object):
                      If not provided, the compiler will be inferred from the
                      environment variable DEVITO_ARCH, or default to GNUCompiler
     :param profile: Flag to enable performance profiling
-    :param cache_blocking: Flag to enable cache blocking
-    :param block_size: Block size used for cache clocking. Can be either a single number
-                       used for all dimensions or a list stating block sizes for each
-                       dimension. Set block size to None to skip blocking on that dim
+    :param cache_blocking: Block sizes used for cache clocking. Can be either a single
+                           number used for all dimensions except inner most or a list
+                           explicitly stating block sizes for each dimension
+                           Set cache_blocking to None to skip blocking on that dim
+                           Set cache_blocking to 0 to use best guess based on architecture
+                           Set cache_blocking to AutoTuner instance, to use auto tuned
+                           tune block sizes
     """
     def __init__(self, name, nt, shape, stencils, factorized=None, spc_border=0,
                  time_order=0, time_dim=None, space_dims=None, dtype=np.float32,
                  forward=True, compiler=None, profile=False,
-                 cache_blocking=False, block_size=5):
+                 cache_blocking=None):
         self.stencils = stencils
         self.dtype = dtype
         self.factorized = factorized or {}
         self.time_order = time_order
+        self.spc_border = spc_border
 
         # Default time and space symbols if not provided
         self.time_dim = time_dim or t
         self.space_dims = \
             space_dims or (x, z) if len(shape) == 2 else (x, y, z)[:len(shape)]
+        self.shape = shape
 
         # Internal flags and meta-data
         self.loop_counters = list(symbols("i1 i2 i3 i4"))
@@ -91,28 +98,14 @@ class Propagator(object):
 
         # Settings for performance profiling
         self.profile = profile
-        self.profiler = Profiler()
+        # Profiler needs to know whether openmp is set
+        self.profiler = Profiler(self.compiler.openmp)
 
-        # Kernel operational intensity dictionary
-        self._kernel_dic_oi = {'add': 0, 'mul': 0, 'load': 0, 'store': 0,
-                               'load_list': [], 'load_all_list': [], 'oi_high': 0,
-                               'oi_high_weighted': 0, 'oi_low': 0, 'oi_low_weighted': 0}
-
-        # Cache blocking and default block sizes
+        # Cache blocking and block sizes
         self.cache_blocking = cache_blocking
-
-        if isinstance(block_size, Iterable):
-            if len(block_size) == len(shape):
-                self.block_sizes = block_size
-            else:
-                raise ValueError("Block size should either be a single number or" +
-                                 " an array of the same size as the spatial domain")
-        elif block_size is None:  # Turn off cache blocking if block size set to None
-            self.cache_blocking = False
-        else:
-            # A single block size has been passed.
-            # Broadcast it to a list of the size of shape
-            self.block_sizes = [int(block_size)]*len(shape)
+        self.block_sizes = []
+        self.shape = shape
+        self.spc_border = spc_border
 
         # Cache C code, lib and function objects
         self._ccode = None
@@ -121,12 +114,17 @@ class Propagator(object):
 
     def run(self, args):
         if self.profile:
-            self.fd.add_struct_param(self.profiler.name, "profiler")
+            self.fd.add_struct_param(self.profiler.t_name, "profiler")
+            self.fd.add_struct_param(self.profiler.f_name, "flops")
 
         f = self.cfunction
 
+        # appends block sizes if cache blocking
+        args += [block for block in self.block_sizes if block]
+
         if self.profile:
-            args.append(self.profiler.as_ctypes_pointer)
+            args.append(self.profiler.as_ctypes_pointer(Profiler.TIME))
+            args.append(self.profiler.as_ctypes_pointer(Profiler.FLOP))
 
         if isinstance(self.compiler, IntelMICCompiler):
             # Off-load propagator kernel via pymic stream
@@ -134,6 +132,19 @@ class Propagator(object):
             self.compiler._stream.sync()
         else:
             f(*args)
+
+        if self.profile:
+            self.log_performance()
+
+    @property
+    def mcells(self):
+        """Calculates MCELLS
+
+        :returns: Mcells as int
+        """
+        iteration_space = map(lambda dim: dim - self.spc_border * 2, self.shape)
+        return int(round(self.nt * np.prod(iteration_space)) /
+                   (self.timings['kernel'] * 10 ** 6))
 
     @property
     def basename(self):
@@ -160,7 +171,8 @@ class Propagator(object):
             self.get_fd()
 
             if self.profile:
-                manager.add_struct_definition(self.profiler.as_cgen_struct)
+                manager.add_struct_definition(self.profiler.as_cgen_struct(Profiler.TIME))
+                manager.add_struct_definition(self.profiler.as_cgen_struct(Profiler.FLOP))
 
             self._ccode = str(manager.generate())
 
@@ -188,7 +200,23 @@ class Propagator(object):
 
     @property
     def timings(self):
-        return self.profiler.as_dictionary
+        return self.profiler.timings
+
+    @property
+    def oi(self):
+        return self.profiler.oi
+
+    @property
+    def oi_low(self):
+        return self.profiler.oi_low
+
+    @property
+    def total_loads(self):
+        return self.profiler.total_load_count
+
+    @property
+    def gflops(self):
+        return self.profiler.gflops
 
     @property
     def save(self):
@@ -230,10 +258,34 @@ class Propagator(object):
 
         return loop_limits
 
+    def log_performance(self):
+        """Logs performance metrics"""
+        shape_str = str(self.shape).replace(', ', ' x ')
+        cb_str = ", blocks - %s " % str(self.block_sizes) \
+            if self.cache_blocking else ' '
+
+        logger.info("shape - %s%s:: %f sec - %s MCells/s - %.2f GFLOPS" %
+                    (shape_str, cb_str, self.timings['kernel'],
+                     self.mcells, self.gflops['kernel']))
+
+    def get_number_of_loads(self):
+        """Gets total number of loads which is used for optimal block size estimation
+           Temp profiler needed as we want this info even when profiling is off
+
+        :returns: Total number of loads
+        """
+        name = 'load_count'
+        profiler = Profiler()
+        at_stencils = [self.convert_equality_to_cgen(stencil)
+                       for stencil in self.stencils]
+        profiler.add_profiling(at_stencils, name)
+        return profiler.total_load_count[name]
+
     def prep_variable_map(self):
         """Mapping from model variables (x, y, z, t) to loop variables (i1, i2, i3, i4)
-        For now, i1 i2 i3 are assigned in the order the variables were
-        defined in init( #var_order)
+
+        For now, i1 i2 i3 are assigned in the order
+        the variables were defined in init( #var_order)
         """
         var_map = {}
         i = 0
@@ -266,10 +318,6 @@ class Propagator(object):
         stmts = []
 
         for equality in stencils:
-            self._kernel_dic_oi = self._get_ops_expr(equality.rhs,
-                                                     self._kernel_dic_oi, False)
-            self._kernel_dic_oi = self._get_ops_expr(equality.lhs,
-                                                     self._kernel_dic_oi, True)
             stencil = self.convert_equality_to_cgen(equality)
             stmts.append(stencil)
 
@@ -278,6 +326,24 @@ class Propagator(object):
         kernel += self._post_kernel_steps
 
         return cgen.Block(factors+kernel)
+
+    def expr_dtype(self, expr):
+        """Gets the resulting dtype of an expression.
+
+        :param expr: The expression
+
+        :returns: The dtype. Defaults to `self.dtype` if none found.
+        """
+        dtypes = []
+
+        for e in preorder_traversal(expr):
+            if hasattr(e, 'dtype'):
+                dtypes.append(e.dtype)
+
+        if dtypes:
+            return np.find_common_type(dtypes, [])
+        else:
+            return self.dtype
 
     def convert_equality_to_cgen(self, equality):
         """Convert given equality to :class:`cgen.Generable` statement
@@ -294,6 +360,9 @@ class Propagator(object):
             s_lhs = ccode(self.time_substitutions(equality.lhs).xreplace(self._var_map))
             s_rhs = self.time_substitutions(equality.rhs).xreplace(self._var_map)
 
+            if s_lhs.find("temp") != -1:
+                s_lhs = cgen.dtype_to_ctype(self.expr_dtype(equality.rhs)) + " " + s_lhs
+
             # appending substituted stencil,which is used to determine alignment pragma
             self.sub_stencils.append(s_rhs)
 
@@ -301,6 +370,7 @@ class Propagator(object):
             if self.dtype is np.float32:
                 s_rhs = str(s_rhs).replace("pow", "powf")
                 s_rhs = str(s_rhs).replace("fabs", "fabsf")
+
             return cgen.Assign(s_lhs, s_rhs)
 
     def get_aligned_pragma(self, stencils, factorized, loop_counters, time_steppers):
@@ -313,7 +383,11 @@ class Propagator(object):
         """
         array_names = set()
         for item in flatten([stencil.free_symbols for stencil in stencils]):
-            if str(item) not in factorized and item not in loop_counters + time_steppers:
+            if (
+                str(item) not in factorized
+                and item not in loop_counters + time_steppers
+                and str(item).find("temp") == -1
+            ):
                 array_names.add(item)
 
         return cgen.Pragma("%s(%s:64)" % (self.compiler.pragma_aligned,
@@ -329,8 +403,11 @@ class Propagator(object):
         :param loop_body: Statement representing the loop body
         :returns: :class:`cgen.Block` representing the loop
         """
+
         # Space loops
-        if self.cache_blocking:
+        if self.cache_blocking is not None:
+            self._decide_block_sizes()
+
             loop_body = self.generate_space_loops_blocking(loop_body)
         else:
             loop_body = self.generate_space_loops(loop_body)
@@ -338,7 +415,12 @@ class Propagator(object):
         omp_master = [cgen.Pragma("omp master")] if self.compiler.openmp else []
         omp_single = [cgen.Pragma("omp single")] if self.compiler.openmp else []
         omp_parallel = [cgen.Pragma("omp parallel")] if self.compiler.openmp else []
-        omp_for = [cgen.Pragma("omp for schedule(static)")]\
+        # suffix of temp variable used for loop reduction of corrosponding struct
+        # member in Profiler struct when openmp is on
+        reduction_list = ["kernel", "loop_body"] if self.compiler.openmp else []
+        omp_for = [cgen.Pragma("omp for schedule(static)"
+                   + (self.profiler.get_loop_reduction("+", reduction_list)
+                      if self.profile else ""))]\
             if self.compiler.openmp else []
 
         t_loop_limits = self.time_loop_limits
@@ -381,7 +463,8 @@ class Propagator(object):
             end_block = omp_single + [cgen.Block(end_block)]
 
         if self.profile:
-            loop_body = self.profiler.add_profiling(loop_body, "loop_body")
+            loop_body = self.profiler.add_profiling(loop_body, "loop_body",
+                                                    omp_flag=omp_master)
 
         loop_body = cgen.Block(initial_block + loop_body + end_block)
 
@@ -395,10 +478,20 @@ class Propagator(object):
         # Code to declare the time stepping variables (outside the time loop)
         def_time_step = [cgen.Value("int", t_var_def.name)
                          for t_var_def in self.time_steppers]
-        body = def_time_step + self.pre_loop + omp_parallel + [loop_body] + self.post_loop
+        if self.profile:
+            body = def_time_step + self.pre_loop +\
+                [cgen.Statement(self.profiler
+                                .get_loop_temp_var_decl("0", reduction_list))]\
+                + omp_parallel + [loop_body] +\
+                [cgen.Statement(s) for s in
+                 self.profiler.get_loop_flop_update(reduction_list)]\
+                + self.post_loop
+        else:
+            body = def_time_step + self.pre_loop\
+                + omp_parallel + [loop_body] + self.post_loop
 
         if self.profile:
-            body = self.profiler.add_profiling(body, "kernel", omp_master)
+            body = self.profiler.add_profiling(body, "kernel")
 
         return cgen.Block(body)
 
@@ -439,8 +532,8 @@ class Propagator(object):
             loop_limits = self._space_loop_limits[spc_var]
 
             if block_size is not None:
+                upper_limit_str = "%s+%sblock" % (block_var, orig_var)
                 lower_limit_str = block_var
-                upper_limit_str = block_var + "+" + str(block_size)
             else:
                 lower_limit_str = str(loop_limits[0])
                 upper_limit_str = str(loop_limits[1])
@@ -461,17 +554,17 @@ class Propagator(object):
                 orig_var = str(self._var_map[spc_var])
                 block_var = orig_var + "b"
                 loop_limits = self._space_loop_limits[spc_var]
-                old_upper_limit = loop_limits[1]                  # sets new upper limit
-                loop_limits = (loop_limits[0], loop_limits[1] -
-                               (loop_limits[1] - loop_limits[0]) % block_size)
 
-                if old_upper_limit - loop_limits[1] > 0:  # check old vs new upper
-                    remainder_counter += 1
+                block_size_str = orig_var + "block"
+                upper_limit_str = "%d - (%d %% %s)" % (loop_limits[1],
+                                                       loop_limits[1] - loop_limits[0],
+                                                       block_size_str)
 
                 loop_body = cgen.For(cgen.InlineInitializer(cgen.Value("int", block_var),
                                                             str(loop_limits[0])),
-                                     str(block_var) + "<" + str(loop_limits[1]),
-                                     str(block_var) + "+=" + str(block_size), loop_body)
+                                     str(block_var) + "<" + upper_limit_str,
+                                     str(block_var) + "+=" + block_size_str, loop_body)
+                remainder_counter += 1
 
         full_remainder = []
         # weights for deciding remainder loop limit
@@ -484,30 +577,29 @@ class Propagator(object):
                                                     self.block_sizes)):
                 orig_var = str(self._var_map[spc_var])
                 loop_limits = self._space_loop_limits[spc_var]  # Full loop limits
+                lower_limit_str = str(loop_limits[0])
+                upper_limit_str = str(loop_limits[1])
 
                 if block_size is not None:
                     if weights[orig_var] < 0:
                         # already blocked loop limits
-                        loop_limits = (loop_limits[0], loop_limits[1] -
-                                       (loop_limits[1] - loop_limits[0]) % block_size)
+                        upper_limit_str = "%d - (%d %% %s)" % (loop_limits[1],
+                                                               loop_limits[1] -
+                                                               loop_limits[0],
+                                                               orig_var + "block")
                     elif weights[orig_var] == 0:
                         # remainder loop limits
-                        loop_limits = (loop_limits[1] -
-                                       (loop_limits[1] - loop_limits[0]) % block_size,
-                                       loop_limits[1])
-
+                        lower_limit_str = "%d - (%d %% %s)" % (loop_limits[1],
+                                                               loop_limits[1] -
+                                                               loop_limits[0],
+                                                               orig_var + "block")
                     weights[orig_var] += 1
 
-                    # If loop limits are equal that means no remainder on that dim,
-                    #  thus we want all iteration space
-                    if loop_limits[0] == loop_limits[1]:
-                        loop_limits = self._space_loop_limits[spc_var]
-
-                remainder_loop = \
-                    cgen.For(cgen.InlineInitializer(cgen.Value("int", orig_var),
-                                                    str(loop_limits[0])),
-                             str(orig_var) + "<" + str(loop_limits[1]),
-                             str(orig_var) + "++", remainder_loop)
+                remainder_loop = cgen.For(cgen.InlineInitializer(cgen.Value("int",
+                                                                            orig_var),
+                                                                 lower_limit_str),
+                                          str(orig_var) + "<" + upper_limit_str,
+                                          str(orig_var) + "++", remainder_loop)
 
                 remainder_loop = self.add_inner_most_dim_pragma(inner_most_dim,
                                                                 self.space_dims,
@@ -517,6 +609,31 @@ class Propagator(object):
             full_remainder.append(remainder_loop)
 
         return [loop_body] + full_remainder if full_remainder else [loop_body]
+
+    def _decide_block_sizes(self):
+        """Decides block size checks whether args have been provided correctly
+
+        :raises ValueError: If cache blocking parameters where passed incorrectly
+        """
+        if isinstance(self.cache_blocking, Iterable):
+            if len(self.cache_blocking) == len(self.shape):
+                self.block_sizes = self.cache_blocking
+            else:
+                raise ValueError("Cache blocking/block sizes have to be an array of the "
+                                 "same size as the spacial domain or single int instance")
+        else:
+            # A single block size has been passed. Broadcast it to a list
+            # We do not want to cache block outer most dim if one int value was passed
+            self.block_sizes = [int(self.cache_blocking)] * (len(self.shape) - 1)
+            self.block_sizes.append(None)
+
+        # replace 0 values with optimal block sizes
+        opt_block_size = get_optimal_block_size(self.shape, self.get_number_of_loads())
+        for i in range(0, len(self.block_sizes)):
+            if self.block_sizes[i] is not None:  # replace 0 values with optimal
+                self.block_sizes[i] = (opt_block_size if self.block_sizes[i] == 0
+                                       else self.block_sizes[i])
+                self.fd.add_value_param(str(self.loop_counters[i]) + "block", np.int64)
 
     def add_inner_most_dim_pragma(self, inner_most_dim, space_dims, loop_body):
         """
@@ -671,8 +788,8 @@ class Propagator(object):
 
         # For Iteration objects we apply time subs to the stencil list
         if isinstance(sympy_expr, Iteration):
-            sympy_expr.stencils = [self.time_substitutions(s)
-                                   for s in sympy_expr.stencils]
+            sympy_expr.expressions = [Expression(self.time_substitutions(s.stencil))
+                                      for s in sympy_expr.expressions]
             return sympy_expr
 
         for arg in postorder_traversal(sympy_expr):
@@ -703,79 +820,3 @@ class Propagator(object):
             self.time_loop_stencils_b.append(stencil)
         else:
             self.time_loop_stencils_a.append(stencil)
-
-    def _get_ops_expr(self, expr, dict1, is_lhs=False):
-        """Get number of different operations in expression expr
-
-        Types of operations are ADD (inc -) and MUL (inc /), arrays (IndexedBase objects)
-        in expr that are not in list arrays are added to the list.
-
-        :param expr: The expression to process
-        :returns: Dictionary of (#ADD, #MUL, list of unique names of fields,
-                                             list of unique field elements)
-        """
-        result = dict1  # dictionary to return
-
-        # add array to list arrays if it is not in it
-        if isinstance(expr, Indexed):
-                base = expr.base.label
-
-                if is_lhs:
-                    result['store'] += 1
-                if base not in result['load_list']:
-                    # accumulate distinct array
-                    result['load_list'] += [base]
-                if expr not in result['load_all_list']:
-                    # accumulate distinct array elements
-                    result['load_all_list'] += [expr]
-
-                return result
-
-        if expr.is_Mul or expr.is_Add or expr.is_Pow:
-                args = expr.args
-
-                # increment MUL or ADD by # arguments less 1
-                # sympy multiplication and addition can have multiple arguments
-                if expr.is_Mul:
-                    result['mul'] += len(args)-1
-                else:
-                    if expr.is_Add:
-                        result['add'] += len(args)-1
-
-                # recursive call of all arguments
-                for expr2 in args:
-                    result2 = self._get_ops_expr(expr2, result, is_lhs)
-
-                return result2
-
-        # return zero and unchanged array if execution gets here
-        return result
-
-    def get_kernel_oi(self, dtype=np.float32):
-        """Get the operation intensity of the kernel. The types of operations are
-         ADD (inc -), MUL (inc /), LOAD, STORE.
-        #LOAD = number of unique fields in the kernel
-
-        Operation intensity OI = (ADD+MUL)/[(LOAD+STORE)*word_size]
-        Weighted OI, OI_w = (ADD+MUL)/(2*Max(ADD,MUL)) * OI
-
-        :param dtype: :class:`numpy.dtype` used to specify the word size
-        :returns: A tuple (#ADD, #MUL, #LOAD, #STORE) containing the operation intensity
-        """
-        load = 0
-        load_all = 0
-        word_size = np.dtype(dtype).itemsize
-        load += len(self._kernel_dic_oi['load_list'])
-        store = self._kernel_dic_oi['store']
-        load_all += len(self._kernel_dic_oi['load_all_list'])
-        self._kernel_dic_oi['load'] = load_all
-        add = self._kernel_dic_oi['add']
-        mul = self._kernel_dic_oi['mul']
-        self._kernel_dic_oi['oi_high'] = float(add+mul)/(load+store)/word_size
-        self._kernel_dic_oi['oi_high_weighted'] = \
-            self._kernel_dic_oi['oi_high']*(add+mul)/max(add, mul)/2.0
-        self._kernel_dic_oi['oi_low'] = float(add+mul)/(load_all+store)/word_size
-        self._kernel_dic_oi['oi_low_weighted'] = \
-            self._kernel_dic_oi['oi_low']*(add+mul)/max(add, mul)/2.0
-
-        return self._kernel_dic_oi['oi_high']
