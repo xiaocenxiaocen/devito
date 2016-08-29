@@ -1,4 +1,5 @@
 import numpy as np
+import os
 
 from Acoustic_codegen import Acoustic_cg
 from containers import IGrid, IShot
@@ -16,16 +17,13 @@ dtype = np.float32
 t_order = 2
 spc_order = 2
 
-
 # Velocity models
 def smooth10(vel, shape):
     out = np.ones(shape)
     out[:, :] = vel[:, :]
     nx = shape[1]
-
     for a in range(5, nx-6):
         out[:, a] = np.sum(vel[:, a - 5:a + 5], axis=1) / 10
-
     return out
 
 
@@ -71,8 +69,8 @@ receiver_coords[:, 0] = np.linspace(50, 950, num=101)
 receiver_coords[:, 1] = location[1]
 data.set_receiver_pos(receiver_coords)
 data.set_shape(nt, 101)
-Acoustic = Acoustic_cg(model, data)
-(rec, u) = Acoustic.Forward(save=True)
+Acoustic = Acoustic_cg(model, data, auto_tune=True)
+(rec, u) = Acoustic.Forward(save=True, use_at_blocks=True)
 print("Preparing adjoint")
 print("Applying")
 srca = Acoustic.Adjoint(rec)

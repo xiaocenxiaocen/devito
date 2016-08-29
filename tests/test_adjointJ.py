@@ -43,7 +43,7 @@ class TestAdjointJ(object):
         f0 = .010
         dt = model0.get_critical_dt()
         t0 = 0.0
-        tn = 1000.0
+        tn = 750.0
         nt = int(1+(tn-t0)/dt)
 
         # Set up the source as Ricker wavelet for f0
