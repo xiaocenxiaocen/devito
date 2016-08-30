@@ -58,7 +58,7 @@ class TTI_cg:
         srccoord = np.array(self.data.source_coords, dtype=self.dtype)[np.newaxis, :]
         if len(self.damp.shape) == 2 and srccoord.shape[1] == 3:
             srccoord = np.delete(srccoord, 1, 1)
-        if len(self.damp.shape) == 2 and self.data.receiver_coords[1] == 3:
+        if len(self.damp.shape) == 2 and self.data.receiver_coords.shape[1] == 3:
             self.data.receiver_coords = np.delete(self.data.receiver_coords, 1, 1)
         self.src = SourceLike(name="src", npoint=1, nt=data.traces.shape[1],
                               dt=self.dt, h=self.model.get_spacing(),

@@ -329,7 +329,7 @@ class BornOperator(Operator):
         stencils = [Eq(u.forward, first_stencil), Eq(U.forward, second_stencil)]
         super(BornOperator, self).__init__(src.nt, m.shape,
                                            stencils=stencils,
-                                           substitutions=[subs, subs],
+                                           subs=[subs, subs],
                                            spc_border=spc_order/2,
                                            time_order=time_order,
                                            forward=True,
@@ -375,7 +375,7 @@ class ForwardOperatorD(Operator):
         subs = {s: dt, h: model.get_spacing()}
         super(ForwardOperatorD, self).__init__(nt, m.shape,
                                                stencils=Eq(u.forward, stencil),
-                                               substitutions=subs,
+                                               subs=subs,
                                                spc_border=spc_order/2,
                                                time_order=time_order,
                                                forward=True,
@@ -418,7 +418,7 @@ class AdjointOperatorD(Operator):
         subs = {s: model.get_critical_dt(), h: model.get_spacing()}
         super(AdjointOperatorD, self).__init__(nt, m.shape,
                                                stencils=Eq(v.backward, stencil),
-                                               substitutions=subs,
+                                               subs=subs,
                                                spc_border=spc_order/2,
                                                time_order=time_order,
                                                forward=False,
