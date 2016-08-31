@@ -3,7 +3,7 @@ from __future__ import print_function
 
 import numpy as np
 
-from examples.tti_operators2 import *
+from examples.tti_operators import *
 
 
 class TTI_cg:
