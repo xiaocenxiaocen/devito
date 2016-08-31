@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from Acoustic_codegen import Acoustic_cg
 from containers import IGrid, IShot
 
@@ -81,9 +80,6 @@ data.set_shape(nt, 101)
 Acoustic = Acoustic_cg(model, data, src, auto_tune=True)
 (rec, u) = Acoustic.Forward(save=True, use_at_blocks=True)
 
-# fig1 = plt.figure()
-# l = plt.imshow(rec, vmin=-10, vmax=10)
-# plt.show()
 print("Preparing adjoint")
 print("Applying")
 srca = Acoustic.Adjoint(rec, use_at_blocks=True)

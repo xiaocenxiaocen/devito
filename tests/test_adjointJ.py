@@ -51,7 +51,6 @@ class TestAdjointJ(object):
             r = (np.pi * f0 * (t - 1./f0))
             return (1-2.*r**2)*np.exp(-r**2)
 
-
         # Source geometry
         time_series = np.zeros((nt, 1))
 

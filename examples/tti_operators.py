@@ -25,8 +25,8 @@ class ForwardOperator(Operator):
                       dtype=damp.dtype)
         m.data[:] = model.padm()
         source = SourceLike(name="src", npoint=nsrc, nt=nt, dt=dt, h=model.get_spacing(),
-                         coordinates=src.receiver_coords, ndim=len(damp.shape),
-                         dtype=damp.dtype, nbpml=model.nbpml)
+                            coordinates=src.receiver_coords, ndim=len(damp.shape),
+                            dtype=damp.dtype, nbpml=model.nbpml)
         source.data[:] = src.traces[:]
         if model.epsilon is not None:
             epsilon = DenseData(name="epsilon", shape=model.get_shape_comp(),

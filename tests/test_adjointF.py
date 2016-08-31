@@ -81,7 +81,6 @@ class TestAdjointF(object):
     def test_adjoint(self, acoustic, forward):
         rec = forward
         srca = acoustic.Adjoint(rec)
-        nt = srca.shape[0]
         # Actual adjoint test
         term1 = np.dot(srca.reshape(-1), acoustic.src.traces.reshape(-1))
         term2 = linalg.norm(rec)**2

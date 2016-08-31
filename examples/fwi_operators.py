@@ -134,8 +134,8 @@ class ForwardOperator(Operator):
                          coordinates=data.receiver_coords, ndim=len(damp.shape),
                          dtype=damp.dtype, nbpml=model.nbpml)
         source = SourceLike(name="src", npoint=nsrc, nt=nt, dt=dt, h=model.get_spacing(),
-                         coordinates=src.receiver_coords, ndim=len(damp.shape),
-                         dtype=damp.dtype, nbpml=model.nbpml)
+                            coordinates=src.receiver_coords, ndim=len(damp.shape),
+                            dtype=damp.dtype, nbpml=model.nbpml)
         source.data[:] = src.traces[:]
         # Derive stencil from symbolic equation
         eqn = m * u.dt2 - u.laplace + damp * u.dt
@@ -188,7 +188,8 @@ class AOperator(Operator):
 
 
 class AdjointOperator(Operator):
-    def __init__(self, model, damp, data, src, recin, time_order=2, spc_order=6, **kwargs):
+    def __init__(self, model, damp, data, src, recin,
+                 time_order=2, spc_order=6, **kwargs):
         nt, nrec = data.traces.shape
         dt = model.get_critical_dt()
         v = TimeData(name="v", shape=model.get_shape_comp(), time_dim=nt,
@@ -197,7 +198,8 @@ class AdjointOperator(Operator):
         m = DenseData(name="m", shape=model.get_shape_comp(), dtype=damp.dtype)
         m.data[:] = model.padm()
         v.pad_time = False
-        srca = SourceLike(name="srca", npoint=src.traces.shape[1], nt=nt, dt=dt, h=model.get_spacing(),
+        srca = SourceLike(name="srca", npoint=src.traces.shape[1],
+                          nt=nt, dt=dt, h=model.get_spacing(),
                           coordinates=src.receiver_coords,
                           ndim=len(damp.shape), dtype=damp.dtype, nbpml=model.nbpml)
         rec = SourceLike(name="rec", npoint=nrec, nt=nt, dt=dt, h=model.get_spacing(),
