@@ -121,7 +121,8 @@ class SourceLike(PointData):
 class ForwardOperator(Operator):
     def __init__(self, model, src, damp, data, time_order=2, spc_order=6,
                  save=False, **kwargs):
-        nrec, nt = data.traces.shape
+        nt, nrec = data.traces.shape
+        nt, nsrc = src.traces.shape
         dt = model.get_critical_dt()
         u = TimeData(name="u", shape=model.get_shape_comp(), time_dim=nt,
                      time_order=time_order, space_order=spc_order, save=save,
@@ -132,6 +133,10 @@ class ForwardOperator(Operator):
         rec = SourceLike(name="rec", npoint=nrec, nt=nt, dt=dt, h=model.get_spacing(),
                          coordinates=data.receiver_coords, ndim=len(damp.shape),
                          dtype=damp.dtype, nbpml=model.nbpml)
+        source = SourceLike(name="src", npoint=nsrc, nt=nt, dt=dt, h=model.get_spacing(),
+                         coordinates=src.receiver_coords, ndim=len(damp.shape),
+                         dtype=damp.dtype, nbpml=model.nbpml)
+        source.data[:] = src.traces[:]
         # Derive stencil from symbolic equation
         eqn = m * u.dt2 - u.laplace + damp * u.dt
         stencil = solve(eqn, u.forward)[0]
@@ -148,11 +153,11 @@ class ForwardOperator(Operator):
                                               **kwargs)
 
         # Insert source and receiver terms post-hoc
-        self.input_params += [src, src.coordinates, rec, rec.coordinates]
+        self.input_params += [source, source.coordinates, rec, rec.coordinates]
         self.output_params += [rec]
-        self.propagator.time_loop_stencils_a = src.add(m, u) + rec.read(u)
-        self.propagator.add_devito_param(src)
-        self.propagator.add_devito_param(src.coordinates)
+        self.propagator.time_loop_stencils_a = source.add(m, u) + rec.read(u)
+        self.propagator.add_devito_param(source)
+        self.propagator.add_devito_param(source.coordinates)
         self.propagator.add_devito_param(rec)
         self.propagator.add_devito_param(rec.coordinates)
 
@@ -183,8 +188,8 @@ class AOperator(Operator):
 
 
 class AdjointOperator(Operator):
-    def __init__(self, model, damp, data, recin, time_order=2, spc_order=6, **kwargs):
-        nrec, nt = data.traces.shape
+    def __init__(self, model, damp, data, src, recin, time_order=2, spc_order=6, **kwargs):
+        nt, nrec = data.traces.shape
         dt = model.get_critical_dt()
         v = TimeData(name="v", shape=model.get_shape_comp(), time_dim=nt,
                      time_order=time_order, space_order=spc_order,
@@ -192,9 +197,8 @@ class AdjointOperator(Operator):
         m = DenseData(name="m", shape=model.get_shape_comp(), dtype=damp.dtype)
         m.data[:] = model.padm()
         v.pad_time = False
-        srca = SourceLike(name="srca", npoint=1, nt=nt, dt=dt, h=model.get_spacing(),
-                          coordinates=np.array(data.source_coords,
-                                               dtype=damp.dtype)[np.newaxis, :],
+        srca = SourceLike(name="srca", npoint=src.traces.shape[1], nt=nt, dt=dt, h=model.get_spacing(),
+                          coordinates=src.receiver_coords,
                           ndim=len(damp.shape), dtype=damp.dtype, nbpml=model.nbpml)
         rec = SourceLike(name="rec", npoint=nrec, nt=nt, dt=dt, h=model.get_spacing(),
                          coordinates=data.receiver_coords, ndim=len(damp.shape),
@@ -252,7 +256,7 @@ class AadjOperator(Operator):
 
 class GradientOperator(Operator):
     def __init__(self, model, damp, data, recin, u, time_order=2, spc_order=6, **kwargs):
-        nrec, nt = data.traces.shape
+        nt, nrec = data.traces.shape
         dt = model.get_critical_dt()
         v = TimeData(name="v", shape=model.get_shape_comp(), time_dim=nt,
                      time_order=time_order, space_order=spc_order,
@@ -297,7 +301,8 @@ class GradientOperator(Operator):
 
 class BornOperator(Operator):
     def __init__(self, model, src, damp, data, dmin, time_order=2, spc_order=6, **kwargs):
-        nrec, nt = data.traces.shape
+        nt, nrec = data.traces.shape
+        nt, nsrc = src.traces.shape
         dt = model.get_critical_dt()
         u = TimeData(name="u", shape=model.get_shape_comp(), time_dim=nt,
                      time_order=time_order, space_order=spc_order,
@@ -314,7 +319,10 @@ class BornOperator(Operator):
         rec = SourceLike(name="rec", npoint=nrec, nt=nt, dt=dt, h=model.get_spacing(),
                          coordinates=data.receiver_coords, ndim=len(damp.shape),
                          dtype=damp.dtype, nbpml=model.nbpml)
-
+        source = SourceLike(name="src", npoint=nsrc, nt=nt, dt=dt, h=model.get_spacing(),
+                            coordinates=src.receiver_coords, ndim=len(damp.shape),
+                            dtype=damp.dtype, nbpml=model.nbpml)
+        source.data[:] = src.traces[:]
         # Derive stencils from symbolic equation
         first_eqn = m * u.dt2 - u.laplace + damp * u.dt
         first_stencil = solve(first_eqn, u.forward)[0]
@@ -323,11 +331,11 @@ class BornOperator(Operator):
 
         # Add substitutions for spacing (temporal and spatial)
         s, h = symbols('s h')
-        subs = {s: src.dt, h: src.h}
+        subs = {s: dt, h: model.get_spacing()}
 
         # Add Born-specific updates and resets
         stencils = [Eq(u.forward, first_stencil), Eq(U.forward, second_stencil)]
-        super(BornOperator, self).__init__(src.nt, m.shape,
+        super(BornOperator, self).__init__(nt, m.shape,
                                            stencils=stencils,
                                            subs=[subs, subs],
                                            spc_border=spc_order/2,
@@ -337,13 +345,13 @@ class BornOperator(Operator):
                                            **kwargs)
 
         # Insert source and receiver terms post-hoc
-        self.input_params += [dm, src, src.coordinates, rec, rec.coordinates, U]
+        self.input_params += [dm, source, source.coordinates, rec, rec.coordinates, U]
         self.output_params = [rec]
-        self.propagator.time_loop_stencils_b = src.add(m, u, t - 1)
+        self.propagator.time_loop_stencils_b = source.add(m, u, t - 1)
         self.propagator.time_loop_stencils_a = rec.read(U)
         self.propagator.add_devito_param(dm)
-        self.propagator.add_devito_param(src)
-        self.propagator.add_devito_param(src.coordinates)
+        self.propagator.add_devito_param(source)
+        self.propagator.add_devito_param(source.coordinates)
         self.propagator.add_devito_param(rec)
         self.propagator.add_devito_param(rec.coordinates)
         self.propagator.add_devito_param(U)

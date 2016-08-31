@@ -10,7 +10,8 @@ from examples.fwi_operators import SourceLike
 class ForwardOperator(Operator):
     def __init__(self, model, src, damp, data, time_order=2, spc_order=4, save=False,
                  **kwargs):
-        nrec, nt = data.traces.shape
+        nt, nrec = data.traces.shape
+        nt, nsrc = src.traces.shape
         dt = model.get_critical_dt()
         u = TimeData(name="u", shape=model.get_shape_comp(),
                      time_dim=nt, time_order=time_order,
@@ -23,7 +24,10 @@ class ForwardOperator(Operator):
         m = DenseData(name="m", shape=model.get_shape_comp(),
                       dtype=damp.dtype)
         m.data[:] = model.padm()
-
+        source = SourceLike(name="src", npoint=nsrc, nt=nt, dt=dt, h=model.get_spacing(),
+                         coordinates=src.receiver_coords, ndim=len(damp.shape),
+                         dtype=damp.dtype, nbpml=model.nbpml)
+        source.data[:] = src.traces[:]
         if model.epsilon is not None:
             epsilon = DenseData(name="epsilon", shape=model.get_shape_comp(),
                                 dtype=damp.dtype)
@@ -137,6 +141,8 @@ class ForwardOperator(Operator):
             Gzz2 = (first_derivative(Gz2r * ang1, dim=x, side=-1, order=spc_brd) +
                     first_derivative(Gz2r * ang0, dim=y, side=-1, order=spc_brd))
 
+        Hp = -(.5 * Gxx1 + .5 * Gxx2 + .5 * Gyy1 + .5 * Gyy2)
+        Hzr = -(.5 * Gzz1 + .5 * Gzz2)
         stencilp = 1.0 / (2.0 * m + s * damp) * \
             (4.0 * m * u + (s * damp - 2.0 * m) *
              u.backward + 2.0 * s**2 * (epsilon * Hp + delta * Hzr))
@@ -144,15 +150,12 @@ class ForwardOperator(Operator):
             (4.0 * m * v + (s * damp - 2.0 * m) *
              v.backward + 2.0 * s**2 * (delta * Hp + Hzr))
 
-        Hp_val = -(.5 * Gxx1 + .5 * Gxx2 + .5 * Gyy1 + .5 * Gyy2)
-        Hzr_val = -(.5 * Gzz1 + .5 * Gzz2)
-        factorized = {Hp: Hp_val, Hzr: Hzr_val}
         # Add substitutions for spacing (temporal and spatial)
-        subs = [{s: src.dt, h: src.h}, {s: src.dt, h: src.h}]
-        first_stencil = Eq(u.forward, stencilp.xreplace(factorized))
-        second_stencil = Eq(v.forward, stencilr.xreplace(factorized))
+        subs = [{s: dt, h: model.get_spacing()}, {s: dt, h: model.get_spacing()}]
+        first_stencil = Eq(u.forward, stencilp)
+        second_stencil = Eq(v.forward, stencilr)
         stencils = [first_stencil, second_stencil]
-        super(ForwardOperator, self).__init__(src.nt, m.shape,
+        super(ForwardOperator, self).__init__(nt, m.shape,
                                               stencils=stencils,
                                               subs=subs,
                                               spc_border=spc_order/2,
@@ -163,12 +166,12 @@ class ForwardOperator(Operator):
                                               **kwargs)
 
         # Insert source and receiver terms post-hoc
-        self.input_params += [src, src.coordinates, rec, rec.coordinates]
+        self.input_params += [source, source.coordinates, rec, rec.coordinates]
         self.output_params += [v, rec]
-        self.propagator.time_loop_stencils_a = (src.add(m, u) + src.add(m, v) +
+        self.propagator.time_loop_stencils_a = (source.add(m, u) + source.add(m, v) +
                                                 rec.read2(u, v))
-        self.propagator.add_devito_param(src)
-        self.propagator.add_devito_param(src.coordinates)
+        self.propagator.add_devito_param(source)
+        self.propagator.add_devito_param(source.coordinates)
         self.propagator.add_devito_param(rec)
         self.propagator.add_devito_param(rec.coordinates)
 

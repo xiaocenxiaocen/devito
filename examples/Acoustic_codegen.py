@@ -9,23 +9,17 @@ class Acoustic_cg:
     """ Class to setup the problem for the Acoustic Wave
         Note: s_order must always be greater than t_order
     """
-    def __init__(self, model, data, source=None, nbpml=40, t_order=2, s_order=2,
+    def __init__(self, model, data, source, nbpml=40, t_order=2, s_order=2,
                  auto_tune=False):
         self.model = model
         self.t_order = t_order
         self.s_order = s_order
         self.data = data
-        self.dtype = np.float32
+        self.src = source
+        self.dtype = np.float64
         self.dt = model.get_critical_dt()
         self.model.nbpml = nbpml
         self.model.set_origin(nbpml)
-        if source is not None:
-            self.source = source.read()
-            self.source.reinterpolate(self.dt)
-            source_time = self.source.traces[0, :]
-            while len(source_time) < self.data.nsamples:
-                source_time = np.append(source_time, [0.0])
-            self.data.set_source(source_time, self.dt, self.data.source_coords)
 
         def damp_boundary(damp):
             h = self.model.get_spacing()
@@ -34,7 +28,7 @@ class Acoustic_cg:
             num_dim = len(damp.shape)
 
             for i in range(nbpml):
-                pos = np.abs((nbpml-i)/float(nbpml))
+                pos = np.abs((nbpml-i+1)/float(nbpml))
                 val = dampcoeff * (pos - np.sin(2*np.pi*pos)/(2*np.pi))
 
                 if num_dim == 2:
@@ -54,16 +48,10 @@ class Acoustic_cg:
 
         # Initialize damp by calling the function that can precompute damping
         damp_boundary(self.damp.data)
-        srccoord = np.array(self.data.source_coords, dtype=self.dtype)[np.newaxis, :]
-        if len(self.damp.shape) == 2 and srccoord.shape[1] == 3:
-            srccoord = np.delete(srccoord, 1, 1)
+        if len(self.damp.shape) == 2 and self.src.receiver_coords.shape[1] == 3:
+            self.src.receiver_coords = np.delete(self.src.receiver_coords, 1, 1)
         if len(self.damp.shape) == 2 and self.data.receiver_coords.shape[1] == 3:
             self.data.receiver_coords = np.delete(self.data.receiver_coords, 1, 1)
-        self.src = SourceLike(name="src", npoint=1, nt=data.traces.shape[1],
-                              dt=self.dt, h=self.model.get_spacing(),
-                              coordinates=srccoord, ndim=len(self.damp.shape),
-                              dtype=self.dtype, nbpml=nbpml)
-        self.src.data[:] = data.get_source()[:, np.newaxis]
 
         if auto_tune:  # auto tuning with dummy forward operator
             fw = ForwardOperator(self.model, self.src, self.damp, self.data,
@@ -94,10 +82,13 @@ class Acoustic_cg:
         u = A.apply()[0]
         return u
 
-    def Adjoint(self, rec, cache_blocking=None):
-        adj = AdjointOperator(self.model, self.damp, self.data, rec,
+    def Adjoint(self, rec, cache_blocking=None, use_at_blocks=False):
+        adj = AdjointOperator(self.model, self.damp, self.data, self.src, rec,
                               time_order=self.t_order, spc_order=self.s_order,
                               cache_blocking=cache_blocking)
+        if use_at_blocks:
+            adj.propagator.cache_blocking = self.at.block_size
+
         v = adj.apply()[0]
         return v.data
 
@@ -114,17 +105,23 @@ class Acoustic_cg:
         v = adj.apply()[0]
         return v.data
 
-    def Gradient(self, rec, u, cache_blocking=None):
+    def Gradient(self, rec, u, cache_blocking=None, use_at_blocks=False):
         grad_op = GradientOperator(self.model, self.damp, self.data, rec, u,
                                    time_order=self.t_order, spc_order=self.s_order,
                                    cache_blocking=cache_blocking)
+        if use_at_blocks:
+            grad_op.propagator.cache_blocking = self.at.block_size
+
         grad = grad_op.apply()[0]
         return grad.data
 
-    def Born(self, dm, cache_blocking=None):
+    def Born(self, dm, cache_blocking=None, use_at_blocks=False):
         born_op = BornOperator(self.model, self.src, self.damp, self.data, dm,
                                time_order=self.t_order, spc_order=self.s_order,
                                cache_blocking=cache_blocking)
+        if use_at_blocks:
+            born_op.propagator.cache_blocking = self.at.block_size
+
         rec = born_op.apply()[0]
         return rec.data
 

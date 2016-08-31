@@ -39,7 +39,7 @@ class TestAdjointJ(object):
         dmpad = model0.pad(dm)
         # Define seismic data.
         data = IShot()
-
+        src = IShot()
         f0 = .010
         dt = model0.get_critical_dt()
         t0 = 0.0
@@ -51,24 +51,33 @@ class TestAdjointJ(object):
             r = (np.pi * f0 * (t - 1./f0))
             return (1-2.*r**2)*np.exp(-r**2)
 
-        time_series = source(np.linspace(t0, tn, nt), f0)
-        location = (origin[0] + dimensions[0] * spacing[0] * 0.5,
-                    origin[-1] + 2 * spacing[-1])
+
+        # Source geometry
+        time_series = np.zeros((nt, 1))
+
+        time_series[:, 0] = source(np.linspace(t0, tn, nt), f0)
+
+        location = np.zeros((1, 3))
+        location[0, 0] = origin[0] + dimensions[0] * spacing[0] * 0.5
+        location[0, 1] = origin[1] + 2 * spacing[1]
         if len(dimensions) == 3:
-            location = (location[0], origin[1] + dimensions[1] * spacing[1] * 0.5,
-                        location[1])
-        data.set_source(time_series, dt, location)
+            location[0, 1] = origin[0] + dimensions[1] * spacing[1] * 0.5
+            location[0, 2] = origin[2] + 2 * spacing[2]
+
+        src.set_receiver_pos(location)
+        src.set_shape(nt, 1)
+        src.set_traces(time_series)
+
         receiver_coords = np.zeros((50, len(dimensions)))
-        receiver_coords[:, 0] = np.linspace(50,
-                                            origin[0] + dimensions[0]*spacing[0] - 50,
+        receiver_coords[:, 0] = np.linspace(50, origin[0] + dimensions[0]*spacing[0] - 50,
                                             num=50)
-        receiver_coords[:, -1] = location[-1]
+        receiver_coords[:, -1] = location[0, -1]
         if len(dimensions) == 3:
-            receiver_coords[:, -1] = location[1]
+            receiver_coords[:, -1] = location[0, 2]
         data.set_receiver_pos(receiver_coords)
         data.set_shape(nt, 50)
         # Adjoint test
-        wave_0 = Acoustic_cg(model0, data, None, t_order=time_order,
+        wave_0 = Acoustic_cg(model0, data, src, t_order=time_order,
                              s_order=space_order, nbpml=10)
         return wave_0, dm, dmpad
 
