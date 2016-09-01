@@ -25,24 +25,24 @@ class TTI_cg:
 
         def damp_boundary(damp):
             h = self.model.get_spacing()
-            dampcoeff = 2 * np.log(1.0 / 0.001) / (40 * h)
+            dampcoeff = np.log(1.0 / 0.001) / (40 * h)
             nbpml = self.model.nbpml
             num_dim = len(damp.shape)
             for i in range(nbpml):
                 pos = np.abs((nbpml-i)/float(nbpml))
                 val = dampcoeff * (pos - np.sin(2*np.pi*pos)/(2*np.pi))
                 if num_dim == 2:
-                    damp[i, :] += val
-                    damp[-(i + 1), :] += val
-                    damp[:, i] += val
-                    damp[:, -(i + 1)] += val
+                    damp[i, :] += 2 * val
+                    damp[-(i + 1), :] += 2 * val
+                    damp[:, i] += 5 * val
+                    damp[:, -(i + 1)] += 5 * val
                 else:
-                    damp[i, :, :] += val
-                    damp[-(i + 1), :, :] += val
-                    damp[:, i, :] += val
-                    damp[:, -(i + 1), :] += val
-                    damp[:, :, i] += val
-                    damp[:, :, -(i + 1)] += val
+                    damp[i, :, :] += 2 * val
+                    damp[-(i + 1), :, :] += 2 * val
+                    damp[:, i, :] += 2 * val
+                    damp[:, -(i + 1), :] += 2 * val
+                    damp[:, :, i] += 5 * val
+                    damp[:, :, -(i + 1)] += 5 * val
 
         self.damp = DenseData(name="damp", shape=self.model.get_shape_comp(),
                               dtype=self.dtype)

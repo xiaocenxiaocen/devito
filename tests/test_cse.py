@@ -18,8 +18,8 @@ def run_acoustic_forward(cse):
     model.shape = dimensions
     model0.shape = dimensions
     model1.shape = dimensions
-    origin = (0., 0.)
-    spacing = (20., 20.)
+    origin = (0., 0., 0.)
+    spacing = (20., 20., 20.)
 
     # True velocity
     true_vp = np.ones(dimensions) + 2.0
