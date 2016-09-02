@@ -50,23 +50,27 @@ class IGrid:
             self.scale = np.sqrt(1 + 2 * np.max(self.epsilon))
         else:
             self.scale = 1
-            self.epsilon=None
+            self.epsilon = None
+
         if delta is not None:
             self.delta = np.sqrt(1 + 2 * delta)
         else:
-            self.delta=None
+            self.delta = None
+
         if phi is not None:
             self.phi = phi
         else:
-            self.phi=None
+            self.phi = None
+
         if theta is not None:
             self.theta = theta
         else:
-            self.theta=None
+            self.theta = None
+
         if rho is not None:
             self.rho = rho
         else:
-            self.rho=None
+            self.rho = None
 
         self.origin = origin
 

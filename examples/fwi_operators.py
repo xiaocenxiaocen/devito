@@ -141,7 +141,7 @@ class ForwardOperator(Operator):
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
                             dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
-            if len(model.get_shape_comp())==3:
+            if len(model.get_shape_comp()) == 3:
                 Lap = (1/rho * u.dx2 + (1/rho)**2 * rho.dx * u.dx +
                        1/rho * u.dy2 + (1/rho)**2 * rho.dy * u.dy +
                        1/rho * u.dz2 + (1/rho)**2 * rho.dz * u.dz)
@@ -190,7 +190,7 @@ class AOperator(Operator):
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
                             dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
-            if len(model.get_shape_comp())==3:
+            if len(model.get_shape_comp()) == 3:
                 Lap = (1/rho * u.dx2 + (1/rho)**2 * rho.dx * u.dx +
                        1/rho * u.dy2 + (1/rho)**2 * rho.dy * u.dy +
                        1/rho * u.dz2 + (1/rho)**2 * rho.dz * u.dz)
@@ -238,7 +238,7 @@ class AdjointOperator(Operator):
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
                             dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
-            if len(model.get_shape_comp())==3:
+            if len(model.get_shape_comp()) == 3:
                 Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
                        1/rho * v.dy2 - (1/rho)**2 * rho.dy * v.dy +
                        1/rho * v.dz2 - (1/rho)**2 * rho.dz * v.dz)
@@ -249,7 +249,7 @@ class AdjointOperator(Operator):
             Lap = u.laplace
             rho = 1
         # Derive stencil from symbolic equation
-        eqn = m / rho * v.dt2 - Lap- damp * v.dt
+        eqn = m / rho * v.dt2 - Lap - damp * v.dt
         stencil = solve(eqn, v.backward)[0]
 
         # Add substitutions for spacing (temporal and spatial)
@@ -286,7 +286,7 @@ class AadjOperator(Operator):
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
                             dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
-            if len(model.get_shape_comp())==3:
+            if len(model.get_shape_comp()) == 3:
                 Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
                        1/rho * v.dy2 - (1/rho)**2 * rho.dy * v.dy +
                        1/rho * v.dz2 - (1/rho)**2 * rho.dz * v.dz)
@@ -331,7 +331,7 @@ class GradientOperator(Operator):
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
                             dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
-            if len(model.get_shape_comp())==3:
+            if len(model.get_shape_comp()) == 3:
                 Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
                        1/rho * v.dy2 - (1/rho)**2 * rho.dy * v.dy +
                        1/rho * v.dz2 - (1/rho)**2 * rho.dz * v.dz)
@@ -398,7 +398,7 @@ class BornOperator(Operator):
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
                             dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
-            if len(model.get_shape_comp())==3:
+            if len(model.get_shape_comp()) == 3:
                 Lap = (1/rho * u.dx2 + (1/rho)**2 * rho.dx * u.dx +
                        1/rho * u.dy2 + (1/rho)**2 * rho.dy * u.dy +
                        1/rho * u.dz2 + (1/rho)**2 * rho.dz * u.dz)
@@ -409,7 +409,7 @@ class BornOperator(Operator):
                 Lap = (1/rho * u.dx2 - (1/rho)**2 * rho.dx * u.dx +
                        1/rho * u.dy2 - (1/rho)**2 * rho.dy * u.dy)
                 LapU = (1/rho * U.dx2 - (1/rho)**2 * rho.dx * U.dx +
-                       1/rho * U.dy2 - (1/rho)**2 * rho.dy * U.dy)
+                        1/rho * U.dy2 - (1/rho)**2 * rho.dy * U.dy)
         else:
             Lap = u.laplace
             LapU = U.laplace
@@ -471,7 +471,7 @@ class ForwardOperatorD(Operator):
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
                             dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
-            if len(model.get_shape_comp())==3:
+            if len(model.get_shape_comp()) == 3:
                 Lap = (1/rho * u.dx2 + (1/rho)**2 * rho.dx * u.dx +
                        1/rho * u.dy2 + (1/rho)**2 * rho.dy * u.dy +
                        1/rho * u.dz2 + (1/rho)**2 * rho.dz * u.dz)
@@ -525,7 +525,7 @@ class AdjointOperatorD(Operator):
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
                             dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
-            if len(model.get_shape_comp())==3:
+            if len(model.get_shape_comp()) == 3:
                 Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
                        1/rho * v.dy2 - (1/rho)**2 * rho.dy * v.dy +
                        1/rho * v.dz2 - (1/rho)**2 * rho.dz * v.dz)
