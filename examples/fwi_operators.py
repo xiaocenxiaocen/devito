@@ -137,8 +137,22 @@ class ForwardOperator(Operator):
                             coordinates=src.receiver_coords, ndim=len(damp.shape),
                             dtype=damp.dtype, nbpml=model.nbpml)
         source.data[:] = src.traces[:]
-        # Derive stencil from symbolic equation
-        eqn = m * u.dt2 - u.laplace + damp * u.dt
+        if model.rho is not None:
+            rho = DenseData(name="rho", shape=model.get_shape_comp(),
+                          dtype=damp.dtype, space_order=spc_order)
+            rho.data[:] = model.pad(model.rho)
+            if len(model.get_shape_comp())==3:
+                Lap = (1/rho * u.dx2 + (1/rho)**2 * rho.dx * u.dx +
+                       1/rho * u.dy2 + (1/rho)**2 * rho.dy * u.dy +
+                       1/rho * u.dz2 + (1/rho)**2 * rho.dz * u.dz)
+            else:
+                Lap = (1/rho * u.dx2 - (1/rho)**2 * rho.dx * u.dx +
+                       1/rho * u.dy2 - (1/rho)**2 * rho.dy * u.dy)
+        else:
+            Lap = u.laplace
+            rho = 1
+            # Derive stencil from symbolic equation
+        eqn = m / rho * u.dt2 - Lap + damp * u.dt
         stencil = solve(eqn, u.forward)[0]
         # Add substitutions for spacing (temporal and spatial)
         s, h = symbols('s h')
@@ -172,8 +186,22 @@ class AOperator(Operator):
         q.pad_time = True
         m = DenseData(name="m", shape=model.get_shape_comp(), dtype=damp.dtype)
         m.data[:] = model.padm()
+        if model.rho is not None:
+            rho = DenseData(name="rho", shape=model.get_shape_comp(),
+                          dtype=damp.dtype, space_order=spc_order)
+            rho.data[:] = model.pad(model.rho)
+            if len(model.get_shape_comp())==3:
+                Lap = (1/rho * u.dx2 + (1/rho)**2 * rho.dx * u.dx +
+                       1/rho * u.dy2 + (1/rho)**2 * rho.dy * u.dy +
+                       1/rho * u.dz2 + (1/rho)**2 * rho.dz * u.dz)
+            else:
+                Lap = (1/rho * u.dx2 - (1/rho)**2 * rho.dx * u.dx +
+                       1/rho * u.dy2 - (1/rho)**2 * rho.dy * u.dy)
+        else:
+            Lap = u.laplace
+            rho = 1
         # Derive stencil from symbolic equation
-        eqn = m * u.dt2 - u.laplace + damp * u.dt
+        eqn = m / rho * u.dt2 - Lap + damp * u.dt
         # Add substitutions for spacing (temporal and spatial)
         s, h = symbols('s h')
         subs = {s: dt, h: model.get_spacing()}
@@ -206,8 +234,22 @@ class AdjointOperator(Operator):
                          coordinates=data.receiver_coords, ndim=len(damp.shape),
                          dtype=damp.dtype, nbpml=model.nbpml)
         rec.data[:] = recin[:]
+        if model.rho is not None:
+            rho = DenseData(name="rho", shape=model.get_shape_comp(),
+                          dtype=damp.dtype, space_order=spc_order)
+            rho.data[:] = model.pad(model.rho)
+            if len(model.get_shape_comp())==3:
+                Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
+                       1/rho * v.dy2 - (1/rho)**2 * rho.dy * v.dy +
+                       1/rho * v.dz2 - (1/rho)**2 * rho.dz * v.dz)
+            else:
+                Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
+                       1/rho * v.dy2 - (1/rho)**2 * rho.dy * v.dy)
+        else:
+            Lap = u.laplace
+            rho = 1
         # Derive stencil from symbolic equation
-        eqn = m * v.dt2 - v.laplace - damp * v.dt
+        eqn = m / rho * v.dt2 - Lap- damp * v.dt
         stencil = solve(eqn, v.backward)[0]
 
         # Add substitutions for spacing (temporal and spatial)
@@ -240,8 +282,22 @@ class AadjOperator(Operator):
                      time_order=time_order, space_order=spc_order,
                      save=True, dtype=damp.dtype)
         u.pad_time = True
+        if model.rho is not None:
+            rho = DenseData(name="rho", shape=model.get_shape_comp(),
+                          dtype=damp.dtype, space_order=spc_order)
+            rho.data[:] = model.pad(model.rho)
+            if len(model.get_shape_comp())==3:
+                Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
+                       1/rho * v.dy2 - (1/rho)**2 * rho.dy * v.dy +
+                       1/rho * v.dz2 - (1/rho)**2 * rho.dz * v.dz)
+            else:
+                Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
+                       1/rho * v.dy2 - (1/rho)**2 * rho.dy * v.dy)
+        else:
+            Lap = u.laplace
+            rho = 1
         # Derive stencil from symbolic equation
-        eqn = m * v.dt2 - v.laplace - damp * v.dt
+        eqn = m / rho * v.dt2 - Lap - damp * v.dt
         stencil = Eq(u.backward, eqn)
         # Add substitutions for spacing (temporal and spatial)
         s, h = symbols('s h')
@@ -271,9 +327,22 @@ class GradientOperator(Operator):
                          dtype=damp.dtype, nbpml=model.nbpml)
         rec.data[:] = recin
         grad = DenseData(name="grad", shape=m.shape, dtype=m.dtype)
-
+        if model.rho is not None:
+            rho = DenseData(name="rho", shape=model.get_shape_comp(),
+                          dtype=damp.dtype, space_order=spc_order)
+            rho.data[:] = model.pad(model.rho)
+            if len(model.get_shape_comp())==3:
+                Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
+                       1/rho * v.dy2 - (1/rho)**2 * rho.dy * v.dy +
+                       1/rho * v.dz2 - (1/rho)**2 * rho.dz * v.dz)
+            else:
+                Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
+                       1/rho * v.dy2 - (1/rho)**2 * rho.dy * v.dy)
+        else:
+            Lap = u.laplace
+            rho = 1
         # Derive stencil from symbolic equation
-        eqn = m * v.dt2 - v.laplace - damp * v.dt
+        eqn = m / rho * v.dt2 - Lap - damp * v.dt
         stencil = solve(eqn, v.backward)[0]
 
         # Add substitutions for spacing (temporal and spatial)
@@ -325,10 +394,30 @@ class BornOperator(Operator):
                             coordinates=src.receiver_coords, ndim=len(damp.shape),
                             dtype=damp.dtype, nbpml=model.nbpml)
         source.data[:] = src.traces[:]
+        if model.rho is not None:
+            rho = DenseData(name="rho", shape=model.get_shape_comp(),
+                          dtype=damp.dtype, space_order=spc_order)
+            rho.data[:] = model.pad(model.rho)
+            if len(model.get_shape_comp())==3:
+                Lap = (1/rho * u.dx2 + (1/rho)**2 * rho.dx * u.dx +
+                       1/rho * u.dy2 + (1/rho)**2 * rho.dy * u.dy +
+                       1/rho * u.dz2 + (1/rho)**2 * rho.dz * u.dz)
+                LapU = (1/rho * U.dx2 + (1/rho)**2 * rho.dx * U.dx +
+                        1/rho * U.dy2 + (1/rho)**2 * rho.dy * U.dy +
+                        1/rho * U.dz2 + (1/rho)**2 * rho.dz * U.dz)
+            else:
+                Lap = (1/rho * u.dx2 - (1/rho)**2 * rho.dx * u.dx +
+                       1/rho * u.dy2 - (1/rho)**2 * rho.dy * u.dy)
+                LapU = (1/rho * U.dx2 - (1/rho)**2 * rho.dx * U.dx +
+                       1/rho * U.dy2 - (1/rho)**2 * rho.dy * U.dy)
+        else:
+            Lap = u.laplace
+            LapU = U.laplace
+            rho = 1
         # Derive stencils from symbolic equation
-        first_eqn = m * u.dt2 - u.laplace + damp * u.dt
+        first_eqn = m / rho * u.dt2 - Lap + damp * u.dt
         first_stencil = solve(first_eqn, u.forward)[0]
-        second_eqn = m * U.dt2 - U.laplace + damp * U.dt + dm * u.dt2
+        second_eqn = m / rho * U.dt2 - LapU + damp * U.dt + dm * u.dt2
         second_stencil = solve(second_eqn, U.forward)[0]
 
         # Add substitutions for spacing (temporal and spatial)
@@ -378,8 +467,21 @@ class ForwardOperatorD(Operator):
         rec = SourceLike(name="rec", npoint=nrec, nt=nt, dt=dt, h=model.get_spacing(),
                          coordinates=data.receiver_coords, ndim=len(damp.shape),
                          dtype=damp.dtype, nbpml=model.nbpml)
+        if model.rho is not None:
+            rho = DenseData(name="rho", shape=model.get_shape_comp(),
+                          dtype=damp.dtype, space_order=spc_order)
+            rho.data[:] = model.pad(model.rho)
+            if len(model.get_shape_comp())==3:
+                Lap = (1/rho * u.dx2 + (1/rho)**2 * rho.dx * u.dx +
+                       1/rho * u.dy2 + (1/rho)**2 * rho.dy * u.dy +
+                       1/rho * u.dz2 + (1/rho)**2 * rho.dz * u.dz)
+            else:
+                Lap = (1/rho * u.dx2 - (1/rho)**2 * rho.dx * u.dx +
+                       1/rho * u.dy2 - (1/rho)**2 * rho.dy * u.dy)
+        else:
+            Lap = u.la
         # Derive stencil from symbolic equation
-        eqn = m * u.dt2 - u.laplace + damp * u.dt + src_dipole
+        eqn = m / rho * u.dt2 - Lap + damp * u.dt + src_dipole
         stencil = solve(eqn, u.forward)[0]
         # Add substitutions for spacing (temporal and spatial)
         subs = {s: dt, h: model.get_spacing()}
@@ -419,8 +521,22 @@ class AdjointOperatorD(Operator):
                          coordinates=data.receiver_coords, ndim=len(damp.shape),
                          dtype=damp.dtype, nbpml=model.nbpml)
         rec.data[:] = recin[:]
+        if model.rho is not None:
+            rho = DenseData(name="rho", shape=model.get_shape_comp(),
+                          dtype=damp.dtype, space_order=spc_order)
+            rho.data[:] = model.pad(model.rho)
+            if len(model.get_shape_comp())==3:
+                Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
+                       1/rho * v.dy2 - (1/rho)**2 * rho.dy * v.dy +
+                       1/rho * v.dz2 - (1/rho)**2 * rho.dz * v.dz)
+            else:
+                Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
+                       1/rho * v.dy2 - (1/rho)**2 * rho.dy * v.dy)
+        else:
+            Lap = u.laplace
+            rho = 1
         # Derive stencil from symbolic equation
-        eqn = m * v.dt2 - v.laplace - damp * v.dt
+        eqn = m / rho * v.dt2 - Lap - damp * v.dt
         stencil = solve(eqn, v.backward)[0]
 
         # Add substitutions for spacing (temporal and spatial)

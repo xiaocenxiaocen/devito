@@ -21,7 +21,9 @@ class TestAdjointF(object):
             true_vp[:, int(dimensions[0] / 2):dimensions[0]] = 2.5
         else:
             true_vp[:, :, int(dimensions[0] / 2):dimensions[0]] = 2.5
-        model.create_model(origin, spacing, true_vp)
+
+        rho = true_vp - np.min(true_vp) + 1
+        model.create_model(origin, spacing, true_vp, rho)
         # Define seismic data.
         data = IShot()
         src = IShot()

@@ -39,7 +39,8 @@ class IGrid:
     def get_spacing(self):
         return self.spacing[0]
 
-    def create_model(self, origin, spacing, vp, epsilon=None,
+    def create_model(self, origin, spacing, vp, rho=None,
+                     epsilon=None,
                      delta=None, theta=None, phi=None):
         self.vp = vp
         self.spacing = spacing
@@ -55,6 +56,8 @@ class IGrid:
             self.phi = phi
         if theta is not None:
             self.theta = theta
+        if rho is not None:
+            self.rho = rho
 
         self.origin = origin
 

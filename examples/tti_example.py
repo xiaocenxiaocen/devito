@@ -21,7 +21,7 @@ true_vp[:, :, int(dimensions[0] / 3):int(2*dimensions[0]/3)] = 3.0
 true_vp[:, :, int(2*dimensions[0] / 3):int(dimensions[0])] = 4.0
 
 model.create_model(
-    origin, spacing, true_vp, .3*np.ones(dimensions), .2*np.ones(dimensions),
+    origin, spacing, true_vp, None, .3*np.ones(dimensions), .2*np.ones(dimensions),
     np.pi/5*np.ones(dimensions), np.pi/5*np.ones(dimensions))
 
 # Define seismic data.
