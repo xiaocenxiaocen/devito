@@ -139,7 +139,7 @@ class ForwardOperator(Operator):
         source.data[:] = src.traces[:]
         if model.rho is not None:
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
-                          dtype=damp.dtype, space_order=spc_order)
+                            dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
             if len(model.get_shape_comp())==3:
                 Lap = (1/rho * u.dx2 + (1/rho)**2 * rho.dx * u.dx +
@@ -188,7 +188,7 @@ class AOperator(Operator):
         m.data[:] = model.padm()
         if model.rho is not None:
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
-                          dtype=damp.dtype, space_order=spc_order)
+                            dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
             if len(model.get_shape_comp())==3:
                 Lap = (1/rho * u.dx2 + (1/rho)**2 * rho.dx * u.dx +
@@ -236,7 +236,7 @@ class AdjointOperator(Operator):
         rec.data[:] = recin[:]
         if model.rho is not None:
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
-                          dtype=damp.dtype, space_order=spc_order)
+                            dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
             if len(model.get_shape_comp())==3:
                 Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
@@ -284,7 +284,7 @@ class AadjOperator(Operator):
         u.pad_time = True
         if model.rho is not None:
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
-                          dtype=damp.dtype, space_order=spc_order)
+                            dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
             if len(model.get_shape_comp())==3:
                 Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
@@ -294,7 +294,7 @@ class AadjOperator(Operator):
                 Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
                        1/rho * v.dy2 - (1/rho)**2 * rho.dy * v.dy)
         else:
-            Lap = u.laplace
+            Lap = v.laplace
             rho = 1
         # Derive stencil from symbolic equation
         eqn = m / rho * v.dt2 - Lap - damp * v.dt
@@ -329,7 +329,7 @@ class GradientOperator(Operator):
         grad = DenseData(name="grad", shape=m.shape, dtype=m.dtype)
         if model.rho is not None:
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
-                          dtype=damp.dtype, space_order=spc_order)
+                            dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
             if len(model.get_shape_comp())==3:
                 Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
@@ -396,7 +396,7 @@ class BornOperator(Operator):
         source.data[:] = src.traces[:]
         if model.rho is not None:
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
-                          dtype=damp.dtype, space_order=spc_order)
+                            dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
             if len(model.get_shape_comp())==3:
                 Lap = (1/rho * u.dx2 + (1/rho)**2 * rho.dx * u.dx +
@@ -469,7 +469,7 @@ class ForwardOperatorD(Operator):
                          dtype=damp.dtype, nbpml=model.nbpml)
         if model.rho is not None:
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
-                          dtype=damp.dtype, space_order=spc_order)
+                            dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
             if len(model.get_shape_comp())==3:
                 Lap = (1/rho * u.dx2 + (1/rho)**2 * rho.dx * u.dx +
@@ -523,7 +523,7 @@ class AdjointOperatorD(Operator):
         rec.data[:] = recin[:]
         if model.rho is not None:
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
-                          dtype=damp.dtype, space_order=spc_order)
+                            dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
             if len(model.get_shape_comp())==3:
                 Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
