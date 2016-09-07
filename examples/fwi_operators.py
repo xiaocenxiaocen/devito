@@ -451,7 +451,7 @@ class BornOperator(Operator):
 class ForwardOperatorD(Operator):
     def __init__(self, model, damp, data, qx, qy, qz=None,
                  time_order=2, spc_order=6, save=False, **kwargs):
-        nrec, nt = data.traces.shape
+        nt, nrec = data.traces.shape
         dt = model.get_critical_dt()
         u = TimeData(name="u", shape=model.get_shape_comp(), time_dim=nt,
                      time_order=time_order, space_order=spc_order, save=save,
@@ -479,7 +479,8 @@ class ForwardOperatorD(Operator):
                 Lap = (1/rho * u.dx2 - (1/rho)**2 * rho.dx * u.dx +
                        1/rho * u.dy2 - (1/rho)**2 * rho.dy * u.dy)
         else:
-            Lap = u.la
+            Lap = u.laplace
+            rho = 1
         # Derive stencil from symbolic equation
         eqn = m / rho * u.dt2 - Lap + damp * u.dt + src_dipole
         stencil = solve(eqn, u.forward)[0]

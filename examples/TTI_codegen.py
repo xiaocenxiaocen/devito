@@ -17,7 +17,7 @@ class TTI_cg:
         self.s_order = s_order
         self.data = data
         self.src = src
-        self.dtype = np.float32
+        self.dtype = np.float64
         self.dt = model.get_critical_dt()
         self.model.nbpml = nbpml
         self.model.set_origin(nbpml)
@@ -32,17 +32,17 @@ class TTI_cg:
                 pos = np.abs((nbpml-i)/float(nbpml))
                 val = dampcoeff * (pos - np.sin(2*np.pi*pos)/(2*np.pi))
                 if num_dim == 2:
-                    damp[i, :] += 2 * val
-                    damp[-(i + 1), :] += 2 * val
-                    damp[:, i] += 5 * val
-                    damp[:, -(i + 1)] += 5 * val
+                    damp[i, :] += 1.5 * val
+                    damp[-(i + 1), :] += 1.5 * val
+                    damp[:, i] += 4 * val
+                    damp[:, -(i + 1)] += 4 * val
                 else:
-                    damp[i, :, :] += 2 * val
-                    damp[-(i + 1), :, :] += 2 * val
+                    damp[i, :, :] += 1.5 * val
+                    damp[-(i + 1), :, :] += 1.5 * val
                     damp[:, i, :] += 2 * val
-                    damp[:, -(i + 1), :] += 2 * val
-                    damp[:, :, i] += 5 * val
-                    damp[:, :, -(i + 1)] += 5 * val
+                    damp[:, -(i + 1), :] += 1.5 * val
+                    damp[:, :, i] += 4 * val
+                    damp[:, :, -(i + 1)] += 4 * val
 
         self.damp = DenseData(name="damp", shape=self.model.get_shape_comp(),
                               dtype=self.dtype)
@@ -58,7 +58,7 @@ class TTI_cg:
                              time_order=self.t_order, spc_order=self.s_order,
                              save=save, cache_blocking=cache_blocking)
         u, v, rec = fw.apply()
-        return (rec.data, u.data, v.data)
+        return (rec.data, u, v)
 
     def Adjoint(self, rec, cache_blocking=None, save=False):
         adj = AdjointOperator(self.model, self.damp, self.data, self.src, rec,
