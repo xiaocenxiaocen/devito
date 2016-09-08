@@ -53,11 +53,11 @@ class Acoustic_cg:
         if len(self.damp.shape) == 2 and self.data.receiver_coords.shape[1] == 3:
             self.data.receiver_coords = np.delete(self.data.receiver_coords, 1, 1)
 
-        fw = ForwardOperator(self.model, self.src, self.damp, self.data,
-                             time_order=self.t_order, spc_order=self.s_order,
-                             save=False)
-        self.at = AutoTuner(fw)
         if auto_tune:  # auto tuning with dummy forward operator
+            fw = ForwardOperator(self.model, self.src, self.damp, self.data,
+                                 time_order=self.t_order, spc_order=self.s_order,
+                                 save=False)
+            self.at = AutoTuner(fw)
             self.at.auto_tune_blocks(self.s_order + 1, self.s_order * 4 + 2)
 
     def Forward(self, save=False, cache_blocking=None, use_at_blocks=False, cse=True):
@@ -65,6 +65,7 @@ class Acoustic_cg:
                              time_order=self.t_order, spc_order=self.s_order,
                              save=save, cache_blocking=cache_blocking, cse=cse)
         if use_at_blocks:
+            self.at = AutoTuner(fw)
             fw.propagator.cache_blocking = self.at.block_size
 
         u, rec = fw.apply()

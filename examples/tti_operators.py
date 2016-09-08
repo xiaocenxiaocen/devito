@@ -104,20 +104,29 @@ class ForwardOperator(Operator):
 
             Gx1p = (ang0 * ang2 * u.dxl + ang0 * ang3 * u.dyl - ang1 * u.dzl)
             Gz1r = (ang1 * ang2 * v.dxl + ang1 * ang3 * v.dyl + ang0 * v.dzl)
-            Gxx1 = (first_derivative(Gx1p / rho, ang0, ang2, dim=x, side=1, order=spc_brd) +
-                    first_derivative(Gx1p / rho, ang0, ang3, dim=y, side=1, order=spc_brd) -
+            Gxx1 = (first_derivative(Gx1p / rho, ang0,
+                                     ang2, dim=x, side=1, order=spc_brd) +
+                    first_derivative(Gx1p / rho, ang0,
+                                     ang3, dim=y, side=1, order=spc_brd) -
                     first_derivative(Gx1p / rho, ang1, dim=z, side=1, order=spc_brd))
-            Gzz1 = (first_derivative(Gz1r / rho, ang1, ang2, dim=x, side=1, order=spc_brd) +
-                    first_derivative(Gz1r / rho, ang1, ang3, dim=y, side=1, order=spc_brd) +
+            Gzz1 = (first_derivative(Gz1r / rho, ang1,
+                                     ang2, dim=x, side=1, order=spc_brd) +
+                    first_derivative(Gz1r / rho, ang1,
+                                     ang3, dim=y, side=1, order=spc_brd) +
                     first_derivative(Gz1r / rho, ang0, dim=z, side=1, order=spc_brd))
 
             Gx2p = (ang0 * ang2 * u.dxr + ang0 * ang3 * u.dyr - ang1 * u.dzr)
             Gz2r = (ang1 * ang2 * v.dxr + ang1 * ang3 * v.dyr + ang0 * v.dzr)
-            Gxx2 = (first_derivative(Gx2p / rho, ang0, ang2, dim=x, side=-1, order=spc_brd) +
-                    first_derivative(Gx2p / rho, ang0, ang3, dim=y, side=-1, order=spc_brd) -
-                    first_derivative(Gx2p / rho, ang1, dim=z, side=-1, order=spc_brd))
-            Gzz2 = (first_derivative(Gz2r / rho, ang1, ang2, dim=x, side=-1, order=spc_brd) +
-                    first_derivative(Gz2r / rho, ang1, ang3, dim=y, side=-1, order=spc_brd) +
+            Gxx2 = (first_derivative(Gx2p / rho, ang0,
+                                     ang2, dim=x, side=-1, order=spc_brd) +
+                    first_derivative(Gx2p / rho, ang0, ang3,
+                                     dim=y, side=-1, order=spc_brd) -
+                    first_derivative(Gx2p / rho, ang1,
+                                     dim=z, side=-1, order=spc_brd))
+            Gzz2 = (first_derivative(Gz2r / rho, ang1,
+                                     ang2, dim=x, side=-1, order=spc_brd) +
+                    first_derivative(Gz2r / rho, ang1,
+                                     ang3, dim=y, side=-1, order=spc_brd) +
                     first_derivative(Gz2r / rho, ang0, dim=z, side=-1, order=spc_brd))
             parm = [m, damp, epsilon, delta, theta, phi, u, v]
         else:

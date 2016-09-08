@@ -94,6 +94,6 @@ if __name__ == "__main__":
     t = TestAdjointF()
     request = type('', (), {})()
     request.param = (60, 70, 80)
-    ac = t.acoustic(request, 2, 12)
+    ac = t.acoustic(request, 2, 4)
     fw = t.forward(ac)
     t.test_adjoint(ac, fw)

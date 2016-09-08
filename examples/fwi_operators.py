@@ -153,9 +153,11 @@ class ForwardOperator(Operator):
             rho = 1
             # Derive stencil from symbolic equation
         eqn = m / rho * u.dt2 - Lap + damp * u.dt
-        stencil = solve(eqn, u.forward)[0]
-        # Add substitutions for spacing (temporal and spatial)
         s, h = symbols('s h')
+        stencil = 1.0 / (2.0 * m / rho + s * damp) * \
+            (4.0 * m / rho * u + (s * damp - 2.0 * m / rho) *
+             u.backward + 2.0 * s**2 * Lap)
+        # Add substitutions for spacing (temporal and spatial)
         subs = {s: dt, h: model.get_spacing()}
         super(ForwardOperator, self).__init__(nt, m.shape,
                                               stencils=Eq(u.forward, stencil),
@@ -250,10 +252,12 @@ class AdjointOperator(Operator):
             rho = 1
         # Derive stencil from symbolic equation
         eqn = m / rho * v.dt2 - Lap - damp * v.dt
-        stencil = solve(eqn, v.backward)[0]
+        s, h = symbols('s h')
+        stencil = 1.0 / (2.0 * m / rho + s * damp) * \
+            (4.0 * m / rho * v + (s * damp - 2.0 * m / rho) *
+             v.forward + 2.0 * s**2 * Lap)
 
         # Add substitutions for spacing (temporal and spatial)
-        s, h = symbols('s h')
         subs = {s: model.get_critical_dt(), h: model.get_spacing()}
         super(AdjointOperator, self).__init__(nt, m.shape,
                                               stencils=Eq(v.backward, stencil),
@@ -343,10 +347,12 @@ class GradientOperator(Operator):
             rho = 1
         # Derive stencil from symbolic equation
         eqn = m / rho * v.dt2 - Lap - damp * v.dt
-        stencil = solve(eqn, v.backward)[0]
+        s, h = symbols('s h')
+        stencil = 1.0 / (2.0 * m / rho + s * damp) * \
+            (4.0 * m / rho * v + (s * damp - 2.0 * m / rho) *
+             v.forward + 2.0 * s**2 * Lap)
 
         # Add substitutions for spacing (temporal and spatial)
-        s, h = symbols('s h')
         subs = {s: model.get_critical_dt(), h: model.get_spacing()}
         # Add Gradient-specific updates. The dt2 is currently hacky
         #  as it has to match the cyclic indices
@@ -415,13 +421,17 @@ class BornOperator(Operator):
             LapU = U.laplace
             rho = 1
         # Derive stencils from symbolic equation
+        s, h = symbols('s h')
         first_eqn = m / rho * u.dt2 - Lap + damp * u.dt
-        first_stencil = solve(first_eqn, u.forward)[0]
+        first_stencil = 1.0 / (2.0 * m / rho + s * damp) * \
+            (4.0 * m / rho * u + (s * damp - 2.0 * m / rho) *
+             u.backward + 2.0 * s**2 * Lap)
         second_eqn = m / rho * U.dt2 - LapU + damp * U.dt + dm * u.dt2
-        second_stencil = solve(second_eqn, U.forward)[0]
+        second_stencil = 1.0 / (2.0 * m / rho + s * damp) * \
+            (4.0 * m / rho * U + (s * damp - 2.0 * m / rho) *
+             U.backward + 2.0 * s**2 * LapU - 2.0 * s**2 * dm * u.dt2)
 
         # Add substitutions for spacing (temporal and spatial)
-        s, h = symbols('s h')
         subs = {s: dt, h: model.get_spacing()}
 
         # Add Born-specific updates and resets
