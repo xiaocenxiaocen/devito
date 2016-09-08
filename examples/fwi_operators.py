@@ -246,7 +246,7 @@ class AdjointOperator(Operator):
                 Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
                        1/rho * v.dy2 - (1/rho)**2 * rho.dy * v.dy)
         else:
-            Lap = u.laplace
+            Lap = v.laplace
             rho = 1
         # Derive stencil from symbolic equation
         eqn = m / rho * v.dt2 - Lap - damp * v.dt
@@ -534,7 +534,7 @@ class AdjointOperatorD(Operator):
                 Lap = (1/rho * v.dx2 - (1/rho)**2 * rho.dx * v.dx +
                        1/rho * v.dy2 - (1/rho)**2 * rho.dy * v.dy)
         else:
-            Lap = u.laplace
+            Lap = v.laplace
             rho = 1
         # Derive stencil from symbolic equation
         eqn = m / rho * v.dt2 - Lap - damp * v.dt
