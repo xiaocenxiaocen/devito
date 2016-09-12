@@ -10,8 +10,8 @@ from examples.fwi_operators import SourceLike
 class ForwardOperator(Operator):
     def __init__(self, model, src, damp, data, time_order=2, spc_order=4, save=False,
                  **kwargs):
-        nt, nrec = data.traces.shape
-        nt, nsrc = src.traces.shape
+        nt, nrec = data.shape
+        nt, nsrc = src.shape
         dt = model.get_critical_dt()
         u = TimeData(name="u", shape=model.get_shape_comp(),
                      time_dim=nt, time_order=time_order,

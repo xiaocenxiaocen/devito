@@ -121,8 +121,8 @@ class SourceLike(PointData):
 class ForwardOperator(Operator):
     def __init__(self, model, src, damp, data, time_order=2, spc_order=6,
                  save=False, **kwargs):
-        nt, nrec = data.traces.shape
-        nt, nsrc = src.traces.shape
+        nt, nrec = data.shape
+        nt, nsrc = src.shape
         dt = model.get_critical_dt()
         u = TimeData(name="u", shape=model.get_shape_comp(), time_dim=nt,
                      time_order=time_order, space_order=spc_order, save=save,
@@ -220,7 +220,7 @@ class AOperator(Operator):
 class AdjointOperator(Operator):
     def __init__(self, model, damp, data, src, recin,
                  time_order=2, spc_order=6, **kwargs):
-        nt, nrec = data.traces.shape
+        nt, nrec = data.shape
         dt = model.get_critical_dt()
         v = TimeData(name="v", shape=model.get_shape_comp(), time_dim=nt,
                      time_order=time_order, space_order=spc_order,
@@ -318,7 +318,7 @@ class AadjOperator(Operator):
 
 class GradientOperator(Operator):
     def __init__(self, model, damp, data, recin, u, time_order=2, spc_order=6, **kwargs):
-        nt, nrec = data.traces.shape
+        nt, nrec = data.shape
         dt = model.get_critical_dt()
         v = TimeData(name="v", shape=model.get_shape_comp(), time_dim=nt,
                      time_order=time_order, space_order=spc_order,
@@ -378,8 +378,8 @@ class GradientOperator(Operator):
 
 class BornOperator(Operator):
     def __init__(self, model, src, damp, data, dmin, time_order=2, spc_order=6, **kwargs):
-        nt, nrec = data.traces.shape
-        nt, nsrc = src.traces.shape
+        nt, nrec = data.shape
+        nt, nsrc = src.shape
         dt = model.get_critical_dt()
         u = TimeData(name="u", shape=model.get_shape_comp(), time_dim=nt,
                      time_order=time_order, space_order=spc_order,
@@ -461,7 +461,7 @@ class BornOperator(Operator):
 class ForwardOperatorD(Operator):
     def __init__(self, model, damp, data, qx, qy, qz=None,
                  time_order=2, spc_order=6, save=False, **kwargs):
-        nt, nrec = data.traces.shape
+        nt, nrec = data.shape
         dt = model.get_critical_dt()
         u = TimeData(name="u", shape=model.get_shape_comp(), time_dim=nt,
                      time_order=time_order, space_order=spc_order, save=save,
@@ -516,7 +516,7 @@ class ForwardOperatorD(Operator):
 class AdjointOperatorD(Operator):
     def __init__(self, model, damp, data, recin,
                  time_order=2, spc_order=6, **kwargs):
-        nrec, nt = data.traces.shape
+        nrec, nt = data.shape
         dt = model.get_critical_dt()
         v = TimeData(name="v", shape=model.get_shape_comp(), time_dim=nt,
                      time_order=time_order, space_order=spc_order,

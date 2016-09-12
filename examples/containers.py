@@ -139,7 +139,7 @@ class IShot:
         self.receiver_coords = pos
 
     def set_shape(self, nt, nrec):
-        self.traces = np.zeros((nt, nrec))
+        self.shape = (nt, nrec)
 
     def set_traces(self, traces):
         self.traces = traces
