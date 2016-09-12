@@ -181,7 +181,7 @@ class DenseData(SymbolicData):
             self._data = np.memmap(filename=self.f, dtype=self.dtype, mode='w+',
                                    shape=self.shape, order='C')
         else:
-            self._data = aligned(np.zeros(self.shape, self.dtype, order='C'),
+            self._data = aligned(self.shape, self.dtype, order='C',
                                  alignment=64)
 
     @property
@@ -426,8 +426,8 @@ class CoordinateData(SymbolicData):
             self.shape = (self.npoint, self.ndim)
             self.indices = self._indices(**kwargs)
             self.dtype = kwargs.get('dtype', np.float32)
-            self.data = aligned(np.zeros(self.shape, self.dtype,
-                                         order='C'), alignment=64)
+            self.data = aligned(self.shape, self.dtype,
+                                order='C', alignment=64)
 
     def __new__(cls, *args, **kwargs):
         ndim = kwargs.get('ndim')
