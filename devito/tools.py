@@ -56,21 +56,21 @@ def sympy_find(expr, term, repl):
     return expr
 
 
-def aligned(shape, dtype, order, alignment=16):
+def aligned(a, alignment=16):
     """Function to align the memmory
 
     :param a: The given memory
     :param alignment: Granularity of alignment, 16 bytes by default
     :returns: Reference to the start of the aligned memory
     """
-    #if (a.ctypes.data % alignment) == 0:
-    #    return a
+    if (a.ctypes.data % alignment) == 0:
+        return a
 
-    extra = alignment / np.dtype(dtype).itemsize
-    buf = np.empty(np.prod(shape) + extra, dtype=dtype)
-    ofs = (-buf.ctypes.data % alignment) / np.dtype(dtype).itemsize
-    aa = buf[ofs:ofs+np.prod(shape)].reshape(shape)
-    #np.copyto(aa, a)
+    extra = alignment / a.itemsize
+    buf = np.empty(a.size + extra, dtype=a.dtype)
+    ofs = (-buf.ctypes.data % alignment) / a.itemsize
+    aa = buf[ofs:ofs+a.size].reshape(a.shape)
+    np.copyto(aa, a)
 
     assert (aa.ctypes.data % alignment) == 0
 

@@ -60,7 +60,7 @@ class TestAdjointF(object):
         receiver_coords[:, 1] = location[0, 1]
         if len(dimensions) == 3:
             receiver_coords[:, 1] = location[0, 1]
-            receiver_coords[:, -1] = location[0, 2]
+            receiver_coords[:, 2] = location[0, 2]
         data.set_receiver_pos(receiver_coords)
         data.set_shape(nt, 50)
         # Adjoint test

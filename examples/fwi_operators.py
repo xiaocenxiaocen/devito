@@ -142,9 +142,9 @@ class ForwardOperator(Operator):
                             dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
             if len(model.get_shape_comp()) == 3:
-                Lap = (1/rho * u.dx2 + (1/rho)**2 * rho.dx * u.dx +
-                       1/rho * u.dy2 + (1/rho)**2 * rho.dy * u.dy +
-                       1/rho * u.dz2 + (1/rho)**2 * rho.dz * u.dz)
+                Lap = (1/rho * u.dx2 - (1/rho)**2 * rho.dx * u.dx +
+                       1/rho * u.dy2 - (1/rho)**2 * rho.dy * u.dy +
+                       1/rho * u.dz2 - (1/rho)**2 * rho.dz * u.dz)
             else:
                 Lap = (1/rho * u.dx2 - (1/rho)**2 * rho.dx * u.dx +
                        1/rho * u.dy2 - (1/rho)**2 * rho.dy * u.dy)
@@ -193,9 +193,9 @@ class AOperator(Operator):
                             dtype=damp.dtype, space_order=spc_order)
             rho.data[:] = model.pad(model.rho)
             if len(model.get_shape_comp()) == 3:
-                Lap = (1/rho * u.dx2 + (1/rho)**2 * rho.dx * u.dx +
-                       1/rho * u.dy2 + (1/rho)**2 * rho.dy * u.dy +
-                       1/rho * u.dz2 + (1/rho)**2 * rho.dz * u.dz)
+                Lap = (1/rho * u.dx2 - (1/rho)**2 * rho.dx * u.dx +
+                       1/rho * u.dy2 - (1/rho)**2 * rho.dy * u.dy +
+                       1/rho * u.dz2 - (1/rho)**2 * rho.dz * u.dz)
             else:
                 Lap = (1/rho * u.dx2 - (1/rho)**2 * rho.dx * u.dx +
                        1/rho * u.dy2 - (1/rho)**2 * rho.dy * u.dy)
