@@ -1,10 +1,8 @@
 import numpy as np
 from Acoustic_codegen import Acoustic_cg
 from containers import IGrid, IShot
-import os
 
-os.system("export DEVITO_OPENMP=1")
-os.system("export OMP_NUM_THREADS=2")
+
 dimensions = (200, 200)
 model = IGrid()
 model.shape = dimensions
