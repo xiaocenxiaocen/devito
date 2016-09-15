@@ -12,6 +12,7 @@ class ForwardOperator(Operator):
                  **kwargs):
         nt, nrec = data.shape
         nt, nsrc = src.shape
+
         dt = model.get_critical_dt()
         u = TimeData(name="u", shape=model.get_shape_comp(),
                      time_dim=nt, time_order=time_order,

@@ -56,7 +56,7 @@ location[1, 1] = origin[1] + dimensions[1] * spacing[1] * 0.6
 location[1, 2] = origin[1] + 2 * spacing[1]
 
 src.set_receiver_pos(location)
-src.set_shape(nt, 1)
+src.set_shape(nt, 2)
 src.set_traces(time_series)
 
 # Receiver geometry
