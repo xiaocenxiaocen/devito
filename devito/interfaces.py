@@ -5,7 +5,8 @@ from sympy import Function, IndexedBase, as_finite_diff
 from sympy.abc import h, p, s
 
 from devito.dimension import t, x, y, z
-from devito.finite_difference import cross_derivative, first_derivative
+from devito.finite_difference import (cross_derivative, first_derivative, left,
+                                      right)
 from devito.logger import error
 from devito.memmap_manager import MemmapManager
 from tools import aligned
@@ -274,32 +275,32 @@ class DenseData(SymbolicData):
     @property
     def dxl(self):
         """Symbol for the derivative wrt to x with a left stencil"""
-        return first_derivative(self, order=self.space_order, dim=x, side=-1)
+        return first_derivative(self, order=self.space_order, dim=x, side=left)
 
     @property
     def dxr(self):
         """Symbol for the derivative wrt to x with a right stencil"""
-        return first_derivative(self, order=self.space_order, dim=x, side=1)
+        return first_derivative(self, order=self.space_order, dim=x, side=right)
 
     @property
     def dyl(self):
         """Symbol for the derivative wrt to y with a left stencil"""
-        return first_derivative(self, order=self.space_order, dim=y, side=-1)
+        return first_derivative(self, order=self.space_order, dim=y, side=left)
 
     @property
     def dyr(self):
         """Symbol for the derivative wrt to y with a right stencil"""
-        return first_derivative(self, order=self.space_order, dim=y, side=1)
+        return first_derivative(self, order=self.space_order, dim=y, side=right)
 
     @property
     def dzl(self):
         """Symbol for the derivative wrt to z with a left stencil"""
-        return first_derivative(self, order=self.space_order, dim=z, side=-1)
+        return first_derivative(self, order=self.space_order, dim=z, side=left)
 
     @property
     def dzr(self):
         """Symbol for the derivative wrt to z with a right stencil"""
-        return first_derivative(self, order=self.space_order, dim=z, side=1)
+        return first_derivative(self, order=self.space_order, dim=z, side=right)
 
 
 class TimeData(DenseData):
@@ -387,7 +388,7 @@ class TimeData(DenseData):
 
     @property
     def backward(self):
-        """Symbol for the time-forward state of the function"""
+        """Symbol for the time-backward state of the function"""
         i = int(self.time_order / 2) if self.time_order >= 2 else 1
 
         return self.subs(t, t - i * s)
@@ -426,8 +427,8 @@ class CoordinateData(SymbolicData):
             self.shape = (self.npoint, self.ndim)
             self.indices = self._indices(**kwargs)
             self.dtype = kwargs.get('dtype', np.float32)
-            self.data = aligned(np.zeros(self.shape, self.dtype, order='C'),
-                                alignment=64)
+            self.data = aligned(np.zeros(self.shape, self.dtype,
+                                         order='C'), alignment=64)
 
     def __new__(cls, *args, **kwargs):
         ndim = kwargs.get('ndim')
