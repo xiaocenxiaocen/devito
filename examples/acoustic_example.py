@@ -9,7 +9,7 @@ model.shape = dimensions
 origin = (0., 0.)
 spacing = (20., 20.)
 t_order = 2
-spc_order = 2
+spc_order = 6
 
 
 # Velocity models

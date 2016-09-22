@@ -25,6 +25,9 @@ class ForwardOperator(Operator):
         m = DenseData(name="m", shape=model.get_shape_comp(),
                       dtype=damp.dtype)
         m.data[:] = model.padm()
+
+        parm = [m, damp, u, v]
+
         source = SourceLike(name="src", npoint=nsrc, nt=nt, dt=dt, h=model.get_spacing(),
                             coordinates=src.receiver_coords, ndim=len(damp.shape),
                             dtype=damp.dtype, nbpml=model.nbpml)
@@ -33,6 +36,7 @@ class ForwardOperator(Operator):
             epsilon = DenseData(name="epsilon", shape=model.get_shape_comp(),
                                 dtype=damp.dtype)
             epsilon.data[:] = model.pad(model.epsilon)
+            parm += [epsilon]
         else:
             epsilon = 1.0
 
@@ -40,12 +44,14 @@ class ForwardOperator(Operator):
             delta = DenseData(name="delta", shape=model.get_shape_comp(),
                               dtype=damp.dtype)
             delta.data[:] = model.pad(model.delta)
+            parm += [delta]
         else:
             delta = 1.0
         if model.theta is not None:
             theta = DenseData(name="theta", shape=model.get_shape_comp(),
                               dtype=damp.dtype)
             theta.data[:] = model.pad(model.theta)
+            parm += [theta]
         else:
             theta = 0
 
@@ -54,8 +60,17 @@ class ForwardOperator(Operator):
                 phi = DenseData(name="phi", shape=model.get_shape_comp(),
                                 dtype=damp.dtype)
                 phi.data[:] = model.pad(model.phi)
+                parm += [phi]
             else:
                 phi = 0
+
+        if model.rho is not None:
+            rho = DenseData(name="rho", shape=model.get_shape_comp(),
+                            dtype=damp.dtype, space_order=spc_order)
+            rho.data[:] = model.pad(model.rho)
+            parm += [rho]
+        else:
+            rho = 1
 
         u.pad_time = save
         v.pad_time = save
@@ -65,12 +80,6 @@ class ForwardOperator(Operator):
                          ndim=len(damp.shape),
                          dtype=damp.dtype,
                          nbpml=model.nbpml)
-        if model.rho is not None:
-            rho = DenseData(name="rho", shape=model.get_shape_comp(),
-                            dtype=damp.dtype, space_order=spc_order)
-            rho.data[:] = model.pad(model.rho)
-        else:
-            rho = 1
 
         def Bhaskarasin(angle):
             if angle == 0:
@@ -129,34 +138,37 @@ class ForwardOperator(Operator):
                     first_derivative(Gz2r / rho, ang1,
                                      ang3, dim=y, side=left, order=spc_brd) +
                     first_derivative(Gz2r / rho, ang0, dim=z, side=left, order=spc_brd))
-            parm = [m, damp, epsilon, delta, theta, phi, u, v]
         else:
             Gyy2 = 0
             Gyy1 = 0
-            parm = [m, damp, epsilon, delta, theta, u, v]
             Gx1p = (ang0 * u.dxr - ang1 * u.dy)
             Gz1r = (ang1 * v.dxr + ang0 * v.dy)
-            Gxx1 = (first_derivative(Gx1p * ang0 / rho, dim=x, side=left, order=spc_brd) -
-                    first_derivative(Gx1p * ang1 / rho, dim=y, side=centered, order=spc_brd))
-            Gzz1 = (first_derivative(Gz1r * ang1 / rho, dim=x, side=left, order=spc_brd) +
-                    first_derivative(Gz1r * ang0 / rho, dim=y, side=centered, order=spc_brd))
+            Gxx1 = (first_derivative(Gx1p * ang0, dim=x,
+                                     side=left, order=spc_brd) -
+                    first_derivative(Gx1p * ang1, dim=y,
+                                     side=centered, order=spc_brd))
+            Gzz1 = (first_derivative(Gz1r * ang1, dim=x,
+                                     side=left, order=spc_brd) +
+                    first_derivative(Gz1r * ang0, dim=y,
+                                     side=centered, order=spc_brd))
             Gx2p = (ang0 * u.dx - ang1 * u.dyr)
             Gz2r = (ang1 * v.dx + ang0 * v.dyr)
-            Gxx2 = (first_derivative(Gx2p * ang0 / rho, dim=x, side=centered, order=spc_brd) -
-                    first_derivative(Gx2p * ang1 / rho, dim=y, side=left, order=spc_brd))
-            Gzz2 = (first_derivative(Gz2r * ang1 / rho, dim=x, side=centered, order=spc_brd) +
-                    first_derivative(Gz2r * ang0 / rho, dim=y, side=left, order=spc_brd))
-
-        if model.rho is not None:
-            parm += [rho]
+            Gxx2 = (first_derivative(Gx2p * ang0, dim=x,
+                                     side=centered, order=spc_brd) -
+                    first_derivative(Gx2p * ang1, dim=y,
+                                     side=left, order=spc_brd))
+            Gzz2 = (first_derivative(Gz2r * ang1, dim=x,
+                                     side=centered, order=spc_brd) +
+                    first_derivative(Gz2r * ang0, dim=y,
+                                     side=left, order=spc_brd))
 
         Hp = -(.5 * Gxx1 + .5 * Gxx2 + .5 * Gyy1 + .5 * Gyy2)
         Hzr = -(.5 * Gzz1 + .5 * Gzz2)
-        stencilp = 1.0 / (2.0 * m / rho + s * damp) * \
-            (4.0 * m / rho * u + (s * damp - 2.0 * m / rho) *
+        stencilp = 1.0 / (2.0 * m + s * damp) * \
+            (4.0 * m * u + (s * damp - 2.0 * m) *
              u.backward + 2.0 * s**2 * (epsilon * Hp + delta * Hzr))
-        stencilr = 1.0 / (2.0 * m / rho + s * damp) * \
-            (4.0 * m / rho * v + (s * damp - 2.0 * m / rho) *
+        stencilr = 1.0 / (2.0 * m + s * damp) * \
+            (4.0 * m * v + (s * damp - 2.0 * m) *
              v.backward + 2.0 * s**2 * (delta * Hp + Hzr))
 
         # Add substitutions for spacing (temporal and spatial)
@@ -167,7 +179,7 @@ class ForwardOperator(Operator):
         super(ForwardOperator, self).__init__(nt, m.shape,
                                               stencils=stencils,
                                               subs=subs,
-                                              spc_border=spc_order/2+2,
+                                              spc_border=spc_order,
                                               time_order=time_order,
                                               forward=True,
                                               dtype=m.dtype,
@@ -211,6 +223,7 @@ class AdjointOperator(Operator):
                                               subs=substitutions,
                                               spc_border=spc_order/2,
                                               time_order=time_order,
+                                              cse=False,
                                               forward=False, dtype=m.dtype,
                                               input_params=input_params,
                                               output_params=output_params)

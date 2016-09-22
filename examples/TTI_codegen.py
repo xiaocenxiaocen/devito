@@ -3,7 +3,7 @@ from __future__ import print_function
 
 import numpy as np
 
-from examples.tti_operators import *
+from examples.tti_operators2 import *
 
 
 class TTI_cg:
@@ -64,5 +64,5 @@ class TTI_cg:
         adj = AdjointOperator(self.model, self.damp, self.data, self.src, rec,
                               time_order=self.t_order, spc_order=self.s_order,
                               cache_blocking=cache_blocking, save=save)
-        srca = adj.apply()[0]
-        return srca.data
+        srca, u, v = adj.apply()
+        return srca.data, u, v

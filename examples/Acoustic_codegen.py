@@ -63,7 +63,8 @@ class Acoustic_cg:
     def Forward(self, save=False, cache_blocking=None, use_at_blocks=False, cse=True):
         fw = ForwardOperator(self.model, self.src, self.damp, self.data,
                              time_order=self.t_order, spc_order=self.s_order,
-                             save=save, cache_blocking=cache_blocking, cse=cse)
+                             save=save, cache_blocking=cache_blocking, cse=cse,
+                             profile=True)
         if use_at_blocks:
             self.at = AutoTuner(fw)
             fw.propagator.cache_blocking = self.at.block_size
