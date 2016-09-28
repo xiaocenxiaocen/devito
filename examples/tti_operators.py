@@ -113,7 +113,7 @@ class ForwardOperator(Operator):
 
         ang0 = ccos(theta)
         ang1 = ssin(theta)
-        spc_brd = spc_order / 2
+        spc_brd = spc_order
         # Derive stencil from symbolic equation
         if len(m.shape) == 3:
             ang2 = ccos(phi)
