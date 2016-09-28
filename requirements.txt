@@ -1,8 +1,10 @@
-git+git://github.com/inducer/cgen
+numpy>=1.11.1
 sympy>=0.7.6
+scipy
+mpmath>=0.19
+pytest
 flake8>=2.1.0
 isort
 py-cpuinfo
-pytest
-scipy
+git+git://github.com/inducer/cgen
 git+git://github.com/inducer/codepy
