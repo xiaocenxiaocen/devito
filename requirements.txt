@@ -4,4 +4,5 @@ flake8>=2.1.0
 isort
 py-cpuinfo
 pytest
+scipy
 git+git://github.com/inducer/codepy
