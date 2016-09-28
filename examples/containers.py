@@ -185,8 +185,6 @@ class IShot:
         new_nsamples = len(newt)
         new_traces = np.zeros((new_nsamples, ntraces))
 
-        print(oldt)
-        print(newt)
         if hasattr(self, 'traces'):
             for i in range(ntraces):
                 tck = interpolate.splrep(oldt, self.traces[:, i], s=0, k=order)
@@ -209,8 +207,7 @@ class IShot:
 
         new_nsamples = len(newt)
         new_traces = np.zeros((new_nsamples, ntraces))
-        print(oldt)
-        print(newt)
+
         for i in range(ntraces):
             tck = interpolate.splrep(oldt, datain[:, i], s=0, k=order)
             new_traces[:, i]= interpolate.splev(newt, tck)
