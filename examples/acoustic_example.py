@@ -39,12 +39,12 @@ model.create_model(origin, spacing, true_vp)
 data = IShot()
 src = IShot()
 f0 = .010
-dt = model.get_critical_dt()
+dt = 4
 t0 = 0.0
 tn = 2000.0
 nt = int(1+(tn-t0)/dt)
 h = model.get_spacing()
-
+print(dt,nt)
 
 # Set up the source as Ricker wavelet for f0
 def source(t, f0):
@@ -67,6 +67,7 @@ location[1, 1] = origin[1] + 2 * spacing[1]
 src.set_receiver_pos(location)
 src.set_shape(nt, 2)
 src.set_traces(time_series)
+src.set_time_axis(dt, tn)
 
 # Receiver geometry
 receiver_coords = np.zeros((101, 2))
@@ -75,7 +76,7 @@ receiver_coords[:, 1] = location[0, 1]
 
 data.set_receiver_pos(receiver_coords)
 data.set_shape(nt, 101)
-
+data.set_time_axis(dt, tn)
 
 # Solve the wave equation
 Acoustic = Acoustic_cg(model, data, src, auto_tune=True)

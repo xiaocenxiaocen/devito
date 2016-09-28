@@ -1,5 +1,6 @@
 # coding: utf-8
 import numpy as np
+from scipy import interpolate
 
 
 class IGrid:
@@ -131,32 +132,90 @@ class IShot:
         return self._shots
 
     def set_source(self, time_serie, dt, location):
+        """ Depreciated"""
         self.source_sign = time_serie
         self.source_coords = location
         self.sample_interval = dt
 
     def set_receiver_pos(self, pos):
+        """ Position of receivers as an
+         (nrec, 3) array"""
         self.receiver_coords = pos
 
     def set_shape(self, nt, nrec):
+        """ Shape of the shot record
+        (nt, nrec)"""
         self.shape = (nt, nrec)
 
     def set_traces(self, traces):
+        """ Add traces data  """
         self.traces = traces
 
+    def set_time_axis(self, dt, tn):
+        """ Define the shot record time axis
+        with sampling interval and last time"""
+        self.sample_interval = dt
+        self.end_time = tn
+
     def get_source(self, ti=None):
+        """ Depreciated"""
         if ti is None:
             return self.source_sign
 
         return self.source_sign[ti]
 
     def get_nrec(self):
+        """ List of ISource objects, of size ntraces
+                """
         ntraces, nsamples = self.traces.shape
 
         return ntraces
 
-    def reinterpolate(self, dt):
-        pass
+    def reinterpolate(self, dt, order=3):
+        """ Reinterpolate data onto a new time axis """
+        if np.isclose(dt, self.sample_interval):
+            return
+
+        nsamples, ntraces = self.shape
+
+        oldt = np.arange(0, self.end_time + self.sample_interval,
+                         self.sample_interval)
+        newt = np.arange(0, self.end_time + dt, dt)
+
+        new_nsamples = len(newt)
+        new_traces = np.zeros((new_nsamples, ntraces))
+
+        print(oldt)
+        print(newt)
+        if hasattr(self, 'traces'):
+            for i in range(ntraces):
+                tck = interpolate.splrep(oldt, self.traces[:, i], s=0, k=order)
+                new_traces[:, i] = interpolate.splev(newt, tck)
+
+        self.traces = new_traces
+        self.sample_interval = dt
+        self.nsamples = new_nsamples
+        self.shape = new_traces.shape
+
+    def reinterpolateD(self, datain, dtin,  dtout, order=3):
+        """ Reinterpolate an input array onto a new time axis"""
+        if np.isclose(dtin,  dtout):
+            return
+
+        nsamples, ntraces = datain.shape
+
+        oldt = np.arange(0, self.end_time + dtin, dtin)
+        newt = np.arange(0, self.end_time + dtout, dtout)
+
+        new_nsamples = len(newt)
+        new_traces = np.zeros((new_nsamples, ntraces))
+        print(oldt)
+        print(newt)
+        for i in range(ntraces):
+            tck = interpolate.splrep(oldt, datain[:, i], s=0, k=order)
+            new_traces[:, i]= interpolate.splev(newt, tck)
+
+        return new_traces
 
     def __str__(self):
         return "Source: "+str(self.source_coords)+", Receiver:"+str(self.receiver_coords)
