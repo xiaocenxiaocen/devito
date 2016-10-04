@@ -1,5 +1,5 @@
 import numpy as np
-from sympy import Eq, solve, symbols
+from sympy import Eq, expand, solve, symbols
 
 from devito.dimension import t
 from devito.interfaces import DenseData, TimeData
@@ -43,9 +43,9 @@ class ForwardOperator(Operator):
             # Derive stencil from symbolic equation
         eqn = m / rho * u.dt2 - Lap + damp * u.dt
         s, h = symbols('s h')
-        stencil = 1.0 / (2.0 * m / rho + s * damp) * \
+        stencil = expand(1.0 / (2.0 * m / rho + s * damp) * \
             (4.0 * m / rho * u + (s * damp - 2.0 * m / rho) *
-             u.backward + 2.0 * s**2 * Lap)
+             u.backward + 2.0 * s**2 * Lap))
         # Add substitutions for spacing (temporal and spatial)
         subs = {s: dt, h: model.get_spacing()}
         super(ForwardOperator, self).__init__(nt, m.shape,

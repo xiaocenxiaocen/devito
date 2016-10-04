@@ -1,5 +1,5 @@
 import numpy as np
-from sympy import (Add, Eq, Function, Indexed, IndexedBase, Symbol, cse,
+from sympy import (Add, collect, Eq, Function, Indexed, IndexedBase, Symbol, cse,
                    lambdify, preorder_traversal, solve, symbols)
 from sympy.utilities.iterables import numbered_symbols
 
@@ -133,7 +133,7 @@ def expr_cse(expr):
     new_stencils = []
 
     for stencil in stencils:
-        new_stencils.append(stencil)
+        new_stencils.append(Eq(stencil.lhs, collect(stencil.rhs, [temp.lhs for temp in to_keep])))
 
         for temp in to_keep:
             if stencil.lhs in preorder_traversal(temp.rhs):
@@ -247,12 +247,12 @@ class Operator(object):
         for name, value in factorized.items():
             factorized[name] = expr_indexify(value)
 
-        # Apply user-defined subs to stencil
-        self.stencils = [eqn.subs(subs[0]) for eqn in self.stencils]
-
         # Applies CSE
         if cse:
             self.stencils = expr_cse(self.stencils)
+
+        # Apply user-defined subs to stencil
+        self.stencils = [eqn.subs(subs[0]) for eqn in self.stencils]
 
         self.propagator = Propagator(self.getName(), nt, shape, self.stencils,
                                      factorized=factorized, dtype=dtype,
