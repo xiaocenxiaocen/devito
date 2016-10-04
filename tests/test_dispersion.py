@@ -1,36 +1,32 @@
 import numpy as np
 import pytest
-from numpy import linalg
 
+from devito import clear_cache
 from examples.acoustic.Acoustic_codegen import Acoustic_cg
 from examples.containers import IGrid, IShot
-
+import matplotlib.pyplot as plt
+from matplotlib import cm
 
 class TestAdjointF(object):
-    @pytest.fixture(params=[(60, 70), (60, 70, 80)])
-    def acoustic(self, request, time_order, space_order):
+    @pytest.fixture(params=[(150, 150)])
+    def acoustic(self, request, grid_size, space_order):
         model = IGrid()
         dimensions = request.param
         # dimensions are (x,z) and (x, y, z)
         origin = tuple([0.0]*len(dimensions))
-        spacing = tuple([15.0]*len(dimensions))
+        spacing = tuple([grid_size]*len(dimensions))
 
         # True velocity
         true_vp = np.ones(dimensions) + .5
-        if len(dimensions) == 2:
-            true_vp[:, int(dimensions[0] / 2):dimensions[0]] = 2.5
-        else:
-            true_vp[:, :, int(dimensions[0] / 2):dimensions[0]] = 2.5
 
-        rho = true_vp - np.min(true_vp) + 1
-        model.create_model(origin, spacing, true_vp, rho)
+        model.create_model(origin, spacing, true_vp)
         # Define seismic data.
         data = IShot()
         src = IShot()
-        f0 = .010
+        f0 = .015
         dt = model.get_critical_dt()
         t0 = 0.0
-        tn = 500.0
+        tn = .35*dimensions[1]*grid_size/1.5
         nt = int(1+(tn-t0)/dt)
 
         # Set up the source as Ricker wavelet for f0
@@ -45,10 +41,8 @@ class TestAdjointF(object):
 
         location = np.zeros((1, 3))
         location[0, 0] = origin[0] + dimensions[0] * spacing[0] * 0.5
-        location[0, 1] = origin[1] + 2 * spacing[1]
-        if len(dimensions) == 3:
-            location[0, 1] = origin[0] + dimensions[1] * spacing[1] * 0.5
-            location[0, 2] = origin[2] + 2 * spacing[2]
+        location[0, 1] = origin[1] + dimensions[1] * spacing[1] * 0.5
+        location[0, 2] = origin[0] + dimensions[1] * spacing[1] * 0.5
 
         src.set_receiver_pos(location)
         src.set_shape(nt, 1)
@@ -66,36 +60,35 @@ class TestAdjointF(object):
         data.set_shape(nt, 50)
         data.set_time_axis(dt, tn)
         # Adjoint test
-        wave_true = Acoustic_cg(model, data, src, t_order=time_order, s_order=space_order,
+        wave_true = Acoustic_cg(model, data, src, t_order=2, s_order=space_order,
                                 nbpml=10)
         return wave_true
 
-    @pytest.fixture(params=[2])
-    def time_order(self, request):
+    @pytest.fixture(params=[10, 12, 14, 16 ,18, 20, 22, 24, 26, 28, 30])
+    def grid_size(self, request):
         return request.param
 
-    @pytest.fixture(params=[2, 4, 6, 8, 10, 12])
+    @pytest.fixture(params=[2, 4, 6, 8, 10, 12, 14, 16, 18, 20])
     def space_order(self, request):
         return request.param
 
     @pytest.fixture
     def forward(self, acoustic):
         rec, u = acoustic.Forward(save=False)
-        return rec
+        print(u.data.shape)
+        return np.squeeze(u.data[1, :, :])
 
     def test_adjoint(self, acoustic, forward):
+        clear_cache()
         rec = forward
-        srca = acoustic.Adjoint(rec)
-        # Actual adjoint test
-        term1 = np.dot(srca.reshape(-1), acoustic.src.traces.reshape(-1))
-        term2 = linalg.norm(rec)**2
-        print(term1, term2, term1 - term2, term1 / term2)
-        assert np.isclose(term1 / term2, 1.0, atol=0.001)
+        ft = open("./Dispersion/disp%s_%s" % (acoustic.s_order , acoustic.model.get_spacing()), 'w')
+        ft.write(rec.data)
+        ft.close()
 
 if __name__ == "__main__":
     t = TestAdjointF()
     request = type('', (), {})()
-    request.param = (60, 70)
-    ac = t.acoustic(request, 2, 4)
+    request.param = (150, 150)
+    ac = t.acoustic(request, 16, 2)
     fw = t.forward(ac)
     t.test_adjoint(ac, fw)

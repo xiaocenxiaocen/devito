@@ -9,7 +9,7 @@ from devito.interfaces import _SymbolCache
 
 @pytest.fixture
 def shape(xdim=20, ydim=30):
-    return (xdim, ydim)
+    return xdim, ydim
 
 
 @pytest.mark.parametrize('SymbolType, dimension', [

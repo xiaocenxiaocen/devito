@@ -13,7 +13,7 @@ class Acoustic_cg(object):
     Note: s_order must always be greater than t_order
     """
     def __init__(self, model, data, source, nbpml=40, t_order=2, s_order=2,
-                 auto_tune=False, cse=True, compiler=None):
+                 auto_tuning=False, cse=True, compiler=None):
         self.model = model
         self.t_order = t_order
         self.s_order = s_order

@@ -75,11 +75,3 @@ class TTI_cg:
 
         u, v, rec = fw.apply()
         return self.data.reinterpolateD(rec.data, self.dt, self.dt_out), u, v
-
-    def Adjoint(self, rec, cache_blocking=None, save=False):
-        adj = AdjointOperator(self.model, self.damp, self.data, self.src,
-                              self.data.reinterpolateD(rec, self.dt_out, self.dt),
-                              time_order=self.t_order, spc_order=self.s_order,
-                              cache_blocking=cache_blocking, save=save)
-        srca, u, v = adj.apply()
-        return self.data.reinterpolateD(srca.data, self.dt, self.dt_out), u, v

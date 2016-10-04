@@ -1,5 +1,5 @@
 import numpy as np
-from sympy import (Add, collect, Eq, Function, Indexed, IndexedBase, Symbol, cse,
+from sympy import (Add, Eq, Function, Indexed, IndexedBase, Symbol, collect, cse,
                    lambdify, preorder_traversal, solve, symbols)
 from sympy.utilities.iterables import numbered_symbols
 
@@ -342,7 +342,7 @@ class Operator(object):
             ind = ind.subs({t: ti}).subs(tuple(zip(self.space_dims, indices)))
             num_ind.append(ind)
 
-        return (arr, tuple(num_ind))
+        return arr, tuple(num_ind)
 
     def expr_to_lambda(self, expr_arr):
         """Tranforms a list of expressions in a list of lambdas

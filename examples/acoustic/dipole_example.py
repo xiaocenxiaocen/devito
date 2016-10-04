@@ -1,6 +1,6 @@
 import numpy as np
 
-from acoustic.Acoustic_codegen import Acoustic_cg
+from examples.acoustic.Acoustic_codegen import Acoustic_cg
 from containers import IGrid, IShot
 from devito.interfaces import TimeData
 from devito.memmap_manager import MemmapManager
@@ -33,7 +33,7 @@ h = model.get_spacing()
 
 # Receiver coordinates
 receiver_coords = np.zeros((101, 3))
-receiver_coords[:, 0] = np.linspace(0, origin[0] + (dimensions[0] -1) * spacing[0], num=101)
+receiver_coords[:, 0] = np.linspace(0, origin[0] + (dimensions[0] - 1) * spacing[0], num=101)
 receiver_coords[:, 1] = origin[0] + dimensions[0] * spacing[0] * .5
 receiver_coords[:, 2] = 2 * spacing[2]
 data.set_receiver_pos(receiver_coords)
@@ -55,4 +55,4 @@ print("Applying forward")
 (rec, u) = Acoustic.Forward_dipole(qx, qy, qz)
 
 
-(qx, qy, qz)= Acoustic.Adjoint_dipole(rec)
+(qx, qy, qz) = Acoustic.Adjoint_dipole(rec)

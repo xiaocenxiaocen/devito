@@ -59,7 +59,6 @@ def run(dimensions=(150, 150, 50), spacing=(20.0, 20.0, 20.0), tn=250.0,
     # data.reinterpolate(dt)
     # Set up the source as Ricker wavelet for f0
 
-
     def source(t, f0):
         r = (np.pi * f0 * (t - 1. / f0))
         return (1 - 2. * r ** 2) * np.exp(-r ** 2)

@@ -155,11 +155,11 @@ class ForwardOperator(Operator):
             Gx2p = (ang0 * u.dx - ang1 * u.dyr)
             Gz2r = (ang1 * v.dx + ang0 * v.dyr)
             Gxx2 = (-first_derivative(Gx2p * ang0, dim=x,
-                                     side=centered, order=spc_brd) -
+                                      side=centered, order=spc_brd) -
                     first_derivative(Gx2p * ang1, dim=y,
                                      side=left, order=spc_brd))
             Gzz2 = (-first_derivative(Gz2r * ang1, dim=x,
-                                     side=centered, order=spc_brd) +
+                                      side=centered, order=spc_brd) +
                     first_derivative(Gz2r * ang0, dim=y,
                                      side=left, order=spc_brd))
             Hp = -(.5 * Gxx1 + .5 * Gxx2)

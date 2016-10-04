@@ -105,7 +105,7 @@ class IGrid:
             return (dim[0] + 2 * self.nbpml, dim[1] + 2 * self.nbpml,
                     dim[2] + 2 * self.nbpml)
         else:
-            return (dim[0] + 2 * self.nbpml, dim[1] + 2 * self.nbpml)
+            return dim[0] + 2 * self.nbpml, dim[1] + 2 * self.nbpml
 
 
 class ISource:
@@ -210,7 +210,7 @@ class IShot:
 
         for i in range(ntraces):
             tck = interpolate.splrep(oldt, datain[:, i], s=0, k=order)
-            new_traces[:, i]= interpolate.splev(newt, tck)
+            new_traces[:, i] = interpolate.splev(newt, tck)
 
         return new_traces
 
