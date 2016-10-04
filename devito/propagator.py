@@ -65,8 +65,6 @@ class Propagator(object):
 
         # Internal flags and meta-data
         self.loop_counters = list(symbols("i1 i2 i3 i4"))
-        self._pre_kernel_steps = []
-        self._post_kernel_steps = []
         self._forward = forward
         self.prep_variable_map()
         self.t_replace = {}
@@ -99,14 +97,7 @@ class Propagator(object):
         # Settings for performance profiling
         self.profile = profile
         # Profiler needs to know whether openmp is set
-        self.profiler = Profiler(self.compiler.openmp)
-
-        # suffix of temp variable used for loop reduction of corrosponding struct
-        # member in Profiler struct when openmp is on
-        self.reduction_list = ["kernel", "loop_body"] if self.compiler.openmp else []
-        self.reduction_clause = (self.profiler
-                                 .get_loop_reduction("+", self.reduction_list)
-                                 if self.profile else "")
+        self.profiler = Profiler(self.compiler.openmp, self.dtype)
 
         # Cache blocking and block sizes
         self.cache_blocking = cache_blocking
@@ -219,7 +210,7 @@ class Propagator(object):
 
     @property
     def total_loads(self):
-        return self.profiler.total_load_count
+        return self.profiler.num_loads
 
     @property
     def gflops(self):
@@ -271,7 +262,7 @@ class Propagator(object):
         cb_str = ", blocks - %s " % str(self.block_sizes) \
             if self.cache_blocking else ' '
 
-        logger.info("shape - %s%s:: %f sec - %s MCells/s - %.2f GFLOPS" %
+        logger.info("shape - %s%s:: %f sec - %s MCells/s - %.2f GFlops/s" %
                     (shape_str, cb_str, self.timings['kernel'],
                      self.mcells, self.gflops['kernel']))
 
@@ -286,7 +277,7 @@ class Propagator(object):
         at_stencils = [self.convert_equality_to_cgen(stencil)
                        for stencil in self.stencils]
         profiler.add_profiling(at_stencils, name)
-        return profiler.total_load_count[name]
+        return profiler.num_loads[name]
 
     def prep_variable_map(self):
         """Mapping from model variables (x, y, z, t) to loop variables (i1, i2, i3, i4)
@@ -336,17 +327,14 @@ class Propagator(object):
                     )
                 )
 
-        stmts = []
+        stmts = [self.convert_equality_to_cgen(x) for x in stencils]
 
-        for equality in stencils:
-            stencil = self.convert_equality_to_cgen(equality)
-            stmts.append(stencil)
+        for idx, dec in enumerate(decl):
+            stmts[idx] = cgen.Assign(dec.inline(), stmts[idx].rvalue)
 
-        kernel = self._pre_kernel_steps
-        kernel += stmts
-        kernel += self._post_kernel_steps
+        kernel = stmts
 
-        return cgen.Block(factors+decl+kernel)
+        return cgen.Block(factors+kernel)
 
     def expr_dtype(self, expr):
         """Gets the resulting dtype of an expression.
@@ -391,8 +379,7 @@ class Propagator(object):
 
             return cgen.Assign(s_lhs, s_rhs)
 
-    def get_aligned_pragma(self, stencils, factorized, loop_counters, time_steppers,
-                           reduction=None):
+    def get_aligned_pragma(self, stencils, factorized, loop_counters, time_steppers):
         """
         Sets the alignment for the pragma.
         :param stencils: List of stencils.
@@ -409,9 +396,9 @@ class Propagator(object):
             ):
                 array_names.add(item)
 
-        return cgen.Pragma("%s(%s:64)%s" % (self.compiler.pragma_aligned,
-                                            ", ".join([str(i) for i in array_names]),
-                                            self.reduction_clause))
+        return cgen.Pragma("%s(%s:64)" % (self.compiler.pragma_aligned,
+                                          ", ".join([str(i) for i in array_names])
+                                          ))
 
     def generate_loops(self, loop_body):
         """Assuming that the variable order defined in init (#var_order) is the
@@ -435,8 +422,8 @@ class Propagator(object):
         omp_master = [cgen.Pragma("omp master")] if self.compiler.openmp else []
         omp_single = [cgen.Pragma("omp single")] if self.compiler.openmp else []
         omp_parallel = [cgen.Pragma("omp parallel")] if self.compiler.openmp else []
-        omp_for = [cgen.Pragma("omp for schedule(static)%s" %
-                               self.reduction_clause)] if self.compiler.openmp else []
+        omp_for = [cgen.Pragma("omp for schedule(static)"
+                               )] if self.compiler.openmp else []
         t_loop_limits = self.time_loop_limits
         t_var = str(self._var_map[self.time_dim])
         cond_op = "<" if self._forward else ">"
@@ -492,20 +479,19 @@ class Propagator(object):
         # Code to declare the time stepping variables (outside the time loop)
         def_time_step = [cgen.Value("int", t_var_def.name)
                          for t_var_def in self.time_steppers]
-        if self.profile:
-            body = def_time_step + self.pre_loop +\
-                [cgen.Statement(self.profiler
-                                .get_loop_temp_var_decl("0", self.reduction_list))]\
-                + omp_parallel + [loop_body] +\
-                [cgen.Statement(s) for s in
-                 self.profiler.get_loop_flop_update(self.reduction_list)]\
-                + self.post_loop
-        else:
-            body = def_time_step + self.pre_loop\
-                + omp_parallel + [loop_body] + self.post_loop
+        body = def_time_step + self.pre_loop + omp_parallel + [loop_body] + self.post_loop
 
         if self.profile:
             body = self.profiler.add_profiling(body, "kernel")
+
+            if self.compiler.openmp:
+                body = [
+                    self.profiler.get_loop_temp_var_decl(key)
+                    for key in self.profiler.temps.keys()
+                ] + body + [
+                    self.profiler.get_loop_flop_update(key)
+                    for key in self.profiler.temps.keys()
+                ]
 
         return cgen.Block(body)
 
@@ -539,6 +525,9 @@ class Propagator(object):
 
         inner_most_dim = True
         orig_loop_body = loop_body
+
+        omp_for = [cgen.Pragma("omp for schedule(static)"
+                               )] if self.compiler.openmp else []
 
         for spc_var, block_size in reversed(zip(list(self.space_dims), self.block_sizes)):
             orig_var = str(self._var_map[spc_var])
@@ -620,6 +609,7 @@ class Propagator(object):
                                                                 remainder_loop)
                 inner_most_dim = False
 
+            full_remainder += omp_for
             full_remainder.append(remainder_loop)
 
         return [loop_body] + full_remainder if full_remainder else [loop_body]
@@ -642,7 +632,11 @@ class Propagator(object):
             self.block_sizes.append(None)
 
         # replace 0 values with optimal block sizes
-        opt_block_size = get_optimal_block_size(self.shape, self.get_number_of_loads())
+        opt_block_size = get_optimal_block_size(
+            self.shape,
+            self.get_number_of_loads(),
+            self.compiler.openmp
+        )
         for i in range(0, len(self.block_sizes)):
             if self.block_sizes[i] is not None:  # replace 0 values with optimal
                 self.block_sizes[i] = (opt_block_size if self.block_sizes[i] == 0
@@ -689,15 +683,6 @@ class Propagator(object):
             weights.update({'i1': -1})
 
         return weights
-
-    def add_loop_step(self, assign, before=False):
-        """Add loop step to loop body"""
-        stm = self.convert_equality_to_cgen(assign)
-
-        if before:
-            self._pre_kernel_steps.append(stm)
-        else:
-            self._post_kernel_steps.append(stm)
 
     def add_devito_param(self, param):
         """Setup relevant devito parameters

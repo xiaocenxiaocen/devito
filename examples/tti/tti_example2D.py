@@ -1,9 +1,7 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib import cm
 
-from containers import IGrid, IShot
-from TTI_codegen import TTI_cg
+from examples.containers import IGrid, IShot
+from examples.tti.TTI_codegen import TTI_cg
 
 dimensions = (300, 300)
 model = IGrid()

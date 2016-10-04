@@ -1,7 +1,7 @@
 numpy>=1.11.1
 sympy>=0.7.6
-scipy
 mpmath>=0.19
+scipy
 pytest
 flake8>=2.1.0
 isort

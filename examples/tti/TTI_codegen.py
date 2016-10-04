@@ -3,7 +3,9 @@ from __future__ import print_function
 
 import numpy as np
 
-from examples.tti_operators import *
+from devito.at_controller import AutoTuner
+from examples.source_type import SourceLike
+from examples.tti.tti_operators import *
 
 
 class TTI_cg:
@@ -55,10 +57,22 @@ class TTI_cg:
         if len(self.damp.shape) == 2 and self.data.receiver_coords.shape[1] == 3:
             self.data.receiver_coords = np.delete(self.data.receiver_coords, 1, 1)
 
-    def Forward(self, save=False, cache_blocking=None):
+    def Forward(self, save=False, cse=True, auto_tuning=False,
+                cache_blocking=None, compiler=None):
         fw = ForwardOperator(self.model, self.src, self.damp, self.data,
                              time_order=self.t_order, spc_order=self.s_order,
-                             save=save, cache_blocking=cache_blocking)
+                             profile=True, save=save, cache_blocking=cache_blocking,
+                             cse=cse, compiler=compiler)
+
+        if auto_tuning:
+            fw_new = ForwardOperator(self.model, self.src, self.damp, self.data,
+                                     time_order=self.t_order, spc_order=self.s_order,
+                                     profile=True, save=save, cse=cse, compiler=compiler)
+
+            at = AutoTuner(fw_new)
+            at.auto_tune_blocks(self.s_order + 1, self.s_order * 4 + 2)
+            fw.propagator.cache_blocking = at.block_size
+
         u, v, rec = fw.apply()
         return self.data.reinterpolateD(rec.data, self.dt, self.dt_out), u, v
 

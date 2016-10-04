@@ -2,21 +2,24 @@
 from __future__ import print_function
 
 from devito.at_controller import AutoTuner
-from examples.fwi_operators import *
+from examples.acoustic.fwi_operators import *
+from examples.source_type import SourceLike
 
 
-class Acoustic_cg:
-    """ Class to setup the problem for the Acoustic Wave
-        Note: s_order must always be greater than t_order
+class Acoustic_cg(object):
+    """
+    Class to setup the problem for the Acoustic Wave.
+
+    Note: s_order must always be greater than t_order
     """
     def __init__(self, model, data, source, nbpml=40, t_order=2, s_order=2,
-                 auto_tune=False):
+                 auto_tune=False, cse=True, compiler=None):
         self.model = model
         self.t_order = t_order
         self.s_order = s_order
         self.data = data
         self.src = source
-        self.dtype = np.float64
+        self.dtype = np.float32
         self.dt = model.get_critical_dt()
         self.dt_out = data.sample_interval
         data.reinterpolate(self.dt)
@@ -56,23 +59,23 @@ class Acoustic_cg:
         if len(self.damp.shape) == 2 and self.data.receiver_coords.shape[1] == 3:
             self.data.receiver_coords = np.delete(self.data.receiver_coords, 1, 1)
 
-        if auto_tune:  # auto tuning with dummy forward operator
+        if auto_tuning:  # auto tuning with dummy forward operator
             fw = ForwardOperator(self.model, self.src, self.damp, self.data,
                                  time_order=self.t_order, spc_order=self.s_order,
-                                 save=False, profile=True)
+                                 profile=True, save=False, cse=cse, compiler=compiler)
             self.at = AutoTuner(fw)
             self.at.auto_tune_blocks(self.s_order + 1, self.s_order * 4 + 2)
 
-    def Forward(self, save=False, cache_blocking=None, use_at_blocks=False, cse=True):
-        """Forward modelling of one or multiple point source.
-        """
+    def Forward(self, save=False, cache_blocking=None,
+                auto_tuning=False, cse=True, compiler=None):
+
+        if auto_tuning:
+            cache_blocking = self.at.block_size
+
         fw = ForwardOperator(self.model, self.src, self.damp, self.data,
                              time_order=self.t_order, spc_order=self.s_order,
                              save=save, cache_blocking=cache_blocking, cse=cse,
-                             profile=True)
-        if use_at_blocks:
-            self.at = AutoTuner(fw)
-            fw.propagator.cache_blocking = self.at.block_size
+                             compiler=compiler, profile=True)
 
         u, rec = fw.apply()
         return self.data.reinterpolateD(rec.data, self.dt, self.dt_out), u
@@ -165,4 +168,3 @@ class Acoustic_cg:
         g = self.Gradient(res, u)
 
         return f, g[self.nbpml:-self.nbpml, self.nbpml:-self.nbpml]
-
