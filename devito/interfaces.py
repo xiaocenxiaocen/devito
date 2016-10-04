@@ -9,7 +9,7 @@ from devito.finite_difference import (cross_derivative, first_derivative, left, 
                                       right)
 from devito.logger import error
 from devito.memmap_manager import MemmapManager
-from tools import aligned
+from devito.tools import aligned
 
 __all__ = ['DenseData', 'TimeData', 'PointData']
 

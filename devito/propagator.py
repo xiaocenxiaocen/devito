@@ -8,7 +8,7 @@ from sympy import Indexed, IndexedBase, preorder_traversal, symbols
 from sympy.utilities.iterables import postorder_traversal
 
 import cgen_wrapper as cgen
-from codeprinter import ccode
+from devito.codeprinter import ccode
 from devito.compiler import (IntelMICCompiler, get_compiler_from_env,
                              get_tmp_dir, jit_compile_and_load)
 from devito.dimension import t, x, y, z
@@ -17,7 +17,7 @@ from devito.function_manager import FunctionDescriptor, FunctionManager
 from devito.iteration import Iteration
 from devito.logger import logger
 from devito.profiler import Profiler
-from tools import flatten, get_optimal_block_size
+from devito.tools import flatten, get_optimal_block_size
 
 
 class Propagator(object):

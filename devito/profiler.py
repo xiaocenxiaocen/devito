@@ -1,7 +1,7 @@
 from collections import defaultdict
 from ctypes import Structure, byref, c_double, c_longlong
 
-from cgen_wrapper import Assign, Block, For, Statement, Struct, Value
+from devito.cgen_wrapper import Assign, Block, For, Statement, Struct, Value
 from devito.logger import error
 
 

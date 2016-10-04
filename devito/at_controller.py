@@ -1,7 +1,7 @@
 import random
 from os import mkdir, path
 
-import logger
+from devito import logger
 from devito.operator import Operator
 
 

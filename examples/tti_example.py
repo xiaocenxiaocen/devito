@@ -58,7 +58,7 @@ location[0, 2] = origin[1] + dimensions[1] * spacing[1] * 0.5
 src.set_receiver_pos(location)
 src.set_shape(nt, 1)
 src.set_traces(time_series)
-
+src.set_time_axis(dt, tn)
 # Receiver geometry
 receiver_coords = np.zeros((101, 3))
 receiver_coords[:, 0] = np.linspace(50, (dimensions[0] - 2) * spacing[0] * 0.5, num=101)
@@ -66,6 +66,7 @@ receiver_coords[:, 1] = origin[1] + dimensions[1] * spacing[1] * 0.5
 receiver_coords[:, 2] = location[0, 2]
 data.set_receiver_pos(receiver_coords)
 data.set_shape(nt, 101)
+data.set_time_axis(dt, tn)
 
 TTI = TTI_cg(model, data, src, s_order=2, nbpml=10)
 (rec, u, v) = TTI.Forward()

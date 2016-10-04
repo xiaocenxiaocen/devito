@@ -171,7 +171,8 @@ class ForwardOperator(Operator):
         # Insert source and receiver terms post-hoc
         self.input_params += [source, source.coordinates, rec, rec.coordinates]
         self.output_params += [rec]
-        self.propagator.time_loop_stencils_a = source.add(m, u) + rec.read(u)
+        self.propagator.time_loop_stencils_b = source.add(m, u, t - 1)
+        self.propagator.time_loop_stencils_a = rec.read(u)
         self.propagator.add_devito_param(source)
         self.propagator.add_devito_param(source.coordinates)
         self.propagator.add_devito_param(rec)
@@ -270,7 +271,8 @@ class AdjointOperator(Operator):
 
         # Insert source and receiver terms post-hoc
         self.input_params += [srca, srca.coordinates, rec, rec.coordinates]
-        self.propagator.time_loop_stencils_a = rec.add(m, v) + srca.read(v)
+        self.propagator.time_loop_stencils_b = rec.add(m, v, t + 1)
+        self.propagator.time_loop_stencils_a = srca.read(v)
         self.output_params = [srca]
         self.propagator.add_devito_param(srca)
         self.propagator.add_devito_param(srca.coordinates)
@@ -516,22 +518,18 @@ class ForwardOperatorD(Operator):
 class AdjointOperatorD(Operator):
     def __init__(self, model, damp, data, recin,
                  time_order=2, spc_order=6, **kwargs):
-        nrec, nt = data.shape
+        nt, nrec = data.shape
         dt = model.get_critical_dt()
         v = TimeData(name="v", shape=model.get_shape_comp(), time_dim=nt,
                      time_order=time_order, space_order=spc_order,
-                     save=False, dtype=damp.dtype)
+                     save=False, pad_time=False, dtype=damp.dtype)
         m = DenseData(name="m", shape=model.get_shape_comp(), dtype=damp.dtype)
         m.data[:] = model.padm()
-        v.pad_time = False
-        srca = SourceLike(name="srca", npoint=1, nt=nt, dt=dt, h=model.get_spacing(),
-                          coordinates=np.array(data.source_coords,
-                                               dtype=damp.dtype)[np.newaxis, :],
-                          ndim=len(damp.shape), dtype=damp.dtype, nbpml=model.nbpml)
         rec = SourceLike(name="rec", npoint=nrec, nt=nt, dt=dt, h=model.get_spacing(),
                          coordinates=data.receiver_coords, ndim=len(damp.shape),
                          dtype=damp.dtype, nbpml=model.nbpml)
         rec.data[:] = recin[:]
+
         if model.rho is not None:
             rho = DenseData(name="rho", shape=model.get_shape_comp(),
                             dtype=damp.dtype, space_order=spc_order)
@@ -548,13 +546,35 @@ class AdjointOperatorD(Operator):
             rho = 1
         # Derive stencil from symbolic equation
         eqn = m / rho * v.dt2 - Lap - damp * v.dt
-        stencil = solve(eqn, v.backward)[0]
+        stencil = Eq(v.backward, solve(eqn, v.backward)[0])
+        s, h = symbols('s h')
+        qx = TimeData(name="qx", shape=model.get_shape_comp(), time_dim=nt,
+                      time_order=time_order, space_order=spc_order,
+                      save=True, pad_time=True, dtype=damp.dtype)
+
+        qy = TimeData(name="qy", shape=model.get_shape_comp(), time_dim=nt,
+                      time_order=time_order, space_order=spc_order,
+                      save=True, pad_time=True, dtype=damp.dtype)
+
+        stencilx = Eq(qx.backward, h * v.dx)
+        stencily = Eq(qy.backward, h * v.dy)
+        stencils = [stencil, stencilx, stencily]
+        output_params = [qx, qy]
+        input_params = [rec, rec.coordinates, qx, qy]
+        subs = [{s: model.get_critical_dt(), h: model.get_spacing()}, {}, {}]
+        if len(model.shape) == 3:
+            qz = TimeData(name="qz", shape=model.get_shape_comp(), time_dim=nt,
+                          time_order=time_order, space_order=spc_order,
+                          save=True, pad_time=True, dtype=damp.dtype)
+            output_params += [qz]
+            input_params += [qz]
+            stencilz = Eq(qz.backward, h * v.dz)
+            stencils = [stencil, stencilx, stencily, stencilz]
+            subs = [{s: model.get_critical_dt(), h: model.get_spacing()}, {}, {}, {}]
 
         # Add substitutions for spacing (temporal and spatial)
-        s, h = symbols('s h')
-        subs = {s: model.get_critical_dt(), h: model.get_spacing()}
         super(AdjointOperatorD, self).__init__(nt, m.shape,
-                                               stencils=Eq(v.backward, stencil),
+                                               stencils=stencils,
                                                subs=subs,
                                                spc_border=spc_order/2,
                                                time_order=time_order,
@@ -563,10 +583,12 @@ class AdjointOperatorD(Operator):
                                                **kwargs)
 
         # Insert source and receiver terms post-hoc
-        self.input_params += [srca, srca.coordinates, rec, rec.coordinates]
-        self.propagator.time_loop_stencils_a = rec.add(m, v) + srca.read(v)
-        self.output_params = [srca]
-        self.propagator.add_devito_param(srca)
-        self.propagator.add_devito_param(srca.coordinates)
+        self.output_params += output_params
+        self.input_params += input_params
+        self.propagator.time_loop_stencils_a = rec.add(m, v)
         self.propagator.add_devito_param(rec)
         self.propagator.add_devito_param(rec.coordinates)
+        self.propagator.add_devito_param(qx)
+        self.propagator.add_devito_param(qy)
+        if len(model.shape) == 3:
+            self.propagator.add_devito_param(qz)

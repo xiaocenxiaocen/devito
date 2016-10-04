@@ -6,5 +6,6 @@ pytest
 flake8>=2.1.0
 isort
 py-cpuinfo
+mpi4py
 git+git://github.com/inducer/cgen
 git+git://github.com/inducer/codepy

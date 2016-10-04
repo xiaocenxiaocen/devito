@@ -3,7 +3,7 @@ from __future__ import print_function
 
 import numpy as np
 
-from examples.tti_operators2 import *
+from examples.tti_operators import *
 
 
 class TTI_cg:
@@ -17,8 +17,11 @@ class TTI_cg:
         self.s_order = s_order
         self.data = data
         self.src = src
-        self.dtype = np.float64
+        self.dtype = np.float32
         self.dt = model.get_critical_dt()
+        self.dt_out = data.sample_interval
+        data.reinterpolate(self.dt)
+        src.reinterpolate(self.dt)
         self.model.nbpml = nbpml
         self.model.set_origin(nbpml)
 
@@ -57,11 +60,12 @@ class TTI_cg:
                              time_order=self.t_order, spc_order=self.s_order,
                              save=save, cache_blocking=cache_blocking)
         u, v, rec = fw.apply()
-        return (rec.data, u, v)
+        return self.data.reinterpolateD(rec.data, self.dt, self.dt_out), u, v
 
     def Adjoint(self, rec, cache_blocking=None, save=False):
-        adj = AdjointOperator(self.model, self.damp, self.data, self.src, rec,
+        adj = AdjointOperator(self.model, self.damp, self.data, self.src,
+                              self.data.reinterpolateD(rec, self.dt_out, self.dt),
                               time_order=self.t_order, spc_order=self.s_order,
                               cache_blocking=cache_blocking, save=save)
         srca, u, v = adj.apply()
-        return srca.data, u, v
+        return self.data.reinterpolateD(srca.data, self.dt, self.dt_out), u, v

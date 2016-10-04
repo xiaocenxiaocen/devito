@@ -68,6 +68,7 @@ class TestGradient(object):
         src.set_receiver_pos(location)
         src.set_shape(nt, 1)
         src.set_traces(time_series)
+        src.set_time_axis(dt, tn)
 
         receiver_coords = np.zeros((50, len(dimensions)))
         receiver_coords[:, 0] = np.linspace(50, origin[0] + dimensions[0]*spacing[0] - 50,
@@ -78,6 +79,7 @@ class TestGradient(object):
             receiver_coords[:, -1] = location[0, 2]
         data.set_receiver_pos(receiver_coords)
         data.set_shape(nt, 50)
+        data.set_time_axis(dt, tn)
         # Adjoint test
         wave_true = Acoustic_cg(model, data, src, t_order=time_order,
                                 s_order=space_order, nbpml=10)

@@ -119,10 +119,11 @@ class Acoustic_cg:
     def Adjoint_dipole(self, rec):
         """Adjoint modelling of a dipole source.
         """
-        adj = AdjointOperatorD(self.model, self.damp, self.data, rec,
+        adj = AdjointOperatorD(self.model, self.damp, self.data,
+                               self.data.reinterpolateD(rec, self.dt_out, self.dt),
                                time_order=self.t_order, spc_order=self.s_order)
-        v = adj.apply()[0]
-        return self.data.reinterpolateD(v.data, self.dt, self.dt_out)
+        qx, qy, qz = adj.apply()
+        return qx, qy, qz
 
     def Gradient(self, rec, u, cache_blocking=None, use_at_blocks=False):
         """FWI gradient from back-propagation of a shot record
