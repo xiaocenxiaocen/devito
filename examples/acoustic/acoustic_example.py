@@ -54,7 +54,6 @@ def run(dimensions=(150, 150, 50), spacing=(20.0, 20.0, 20.0), tn=250.0,
     t0 = 0.0
     tn = 700.0
     nt = int(1 + (tn - t0) / dt)
-    h = model.get_spacing()
 
     # data.reinterpolate(dt)
     # Set up the source as Ricker wavelet for f0

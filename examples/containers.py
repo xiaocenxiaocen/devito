@@ -195,9 +195,9 @@ class IShot:
         self.nsamples = new_nsamples
         self.shape = new_traces.shape
 
-    def reinterpolateD(self, datain, dtin,  dtout, order=3):
+    def reinterpolateD(self, datain, dtin, dtout, order=3):
         """ Reinterpolate an input array onto a new time axis"""
-        if np.isclose(dtin,  dtout):
+        if np.isclose(dtin, dtout):
             return datain
 
         nsamples, ntraces = datain.shape

@@ -1,4 +1,3 @@
-import numpy as np
 from sympy import Eq, expand, solve, symbols
 
 from devito.dimension import t
@@ -41,7 +40,7 @@ class ForwardOperator(Operator):
             Lap = u.laplace
             rho = 1
             # Derive stencil from symbolic equation
-        eqn = m / rho * u.dt2 - Lap + damp * u.dt
+        # eqn = m / rho * u.dt2 - Lap + damp * u.dt
         s, h = symbols('s h')
         stencil = expand(1.0 / (2.0 * m / rho + s * damp) *
                          (4.0 * m / rho * u + (s * damp - 2.0 * m / rho) *
@@ -141,7 +140,7 @@ class AdjointOperator(Operator):
             Lap = v.laplace
             rho = 1
         # Derive stencil from symbolic equation
-        eqn = m / rho * v.dt2 - Lap - damp * v.dt
+        # eqn = m / rho * v.dt2 - Lap - damp * v.dt
         s, h = symbols('s h')
         stencil = 1.0 / (2.0 * m / rho + s * damp) * \
             (4.0 * m / rho * v + (s * damp - 2.0 * m / rho) *
@@ -237,7 +236,7 @@ class GradientOperator(Operator):
             Lap = v.laplace
             rho = 1
         # Derive stencil from symbolic equation
-        eqn = m / rho * v.dt2 - Lap - damp * v.dt
+        # eqn = m / rho * v.dt2 - Lap - damp * v.dt
         s, h = symbols('s h')
         stencil = 1.0 / (2.0 * m / rho + s * damp) * \
             (4.0 * m / rho * v + (s * damp - 2.0 * m / rho) *
@@ -313,11 +312,11 @@ class BornOperator(Operator):
             rho = 1
         # Derive stencils from symbolic equation
         s, h = symbols('s h')
-        first_eqn = m / rho * u.dt2 - Lap + damp * u.dt
+        # first_eqn = m / rho * u.dt2 - Lap + damp * u.dt
         first_stencil = 1.0 / (2.0 * m / rho + s * damp) * \
             (4.0 * m / rho * u + (s * damp - 2.0 * m / rho) *
              u.backward + 2.0 * s**2 * Lap)
-        second_eqn = m / rho * U.dt2 - LapU + damp * U.dt + dm * u.dt2
+        # second_eqn = m / rho * U.dt2 - LapU + damp * U.dt + dm * u.dt2
         second_stencil = 1.0 / (2.0 * m / rho + s * damp) * \
             (4.0 * m / rho * U + (s * damp - 2.0 * m / rho) *
              U.backward + 2.0 * s**2 * LapU - 2.0 * s**2 * dm * u.dt2)

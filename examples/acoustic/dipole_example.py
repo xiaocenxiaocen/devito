@@ -33,7 +33,8 @@ h = model.get_spacing()
 
 # Receiver coordinates
 receiver_coords = np.zeros((101, 3))
-receiver_coords[:, 0] = np.linspace(0, origin[0] + (dimensions[0] - 1) * spacing[0], num=101)
+receiver_coords[:, 0] = np.linspace(0, origin[0] +
+                                    (dimensions[0] - 1) * spacing[0], num=101)
 receiver_coords[:, 1] = origin[0] + dimensions[0] * spacing[0] * .5
 receiver_coords[:, 2] = 2 * spacing[2]
 data.set_receiver_pos(receiver_coords)
