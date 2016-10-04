@@ -59,8 +59,7 @@ class ForwardOperator(Operator):
         # Insert source and receiver terms post-hoc
         self.input_params += [source, source.coordinates, rec, rec.coordinates]
         self.output_params += [rec]
-        self.propagator.time_loop_stencils_b = source.add(m, u, t - 1)
-        self.propagator.time_loop_stencils_a = rec.read(u)
+        self.propagator.time_loop_stencils_a = rec.read(u) + source.add(m, u)
         self.propagator.add_devito_param(source)
         self.propagator.add_devito_param(source.coordinates)
         self.propagator.add_devito_param(rec)
@@ -159,8 +158,7 @@ class AdjointOperator(Operator):
 
         # Insert source and receiver terms post-hoc
         self.input_params += [srca, srca.coordinates, rec, rec.coordinates]
-        self.propagator.time_loop_stencils_b = rec.add(m, v, t + 1)
-        self.propagator.time_loop_stencils_a = srca.read(v)
+        self.propagator.time_loop_stencils_a = srca.read(v) + rec.add(m, v)
         self.output_params = [srca]
         self.propagator.add_devito_param(srca)
         self.propagator.add_devito_param(srca.coordinates)
