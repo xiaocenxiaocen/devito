@@ -1,8 +1,9 @@
-numpy>=1.11.1
+flake8>=2.1.0
 sympy>=0.7.6
+numpy>=1.11.1
+scipy
 mpmath>=0.19
 pytest
-flake8>=2.1.0
 isort
 py-cpuinfo
 git+git://github.com/inducer/cgen
