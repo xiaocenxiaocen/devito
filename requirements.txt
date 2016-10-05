@@ -7,4 +7,3 @@ isort
 py-cpuinfo
 git+git://github.com/inducer/cgen
 git+git://github.com/inducer/codepy
-scipy
