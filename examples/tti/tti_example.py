@@ -72,7 +72,7 @@ def run(dimensions=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=250.0,
     data.set_shape(nt, 101)
     data.set_time_axis(dt, tn)
 
-    TTI = TTI_cg(model, data, None, t_order=time_order, s_order=space_order, nbpml=nbpml)
+    TTI = TTI_cg(model, data, src, t_order=time_order, s_order=space_order, nbpml=nbpml)
     rec, u, v, gflops, oi, timings = TTI.Forward(
         cse=cse, auto_tuning=auto_tuning, cache_blocking=cache_blocking, compiler=compiler
     )

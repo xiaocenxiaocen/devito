@@ -139,9 +139,7 @@ class ForwardOperator(Operator):
                     first_derivative(Gzr2, ang0, dim=z, side=centered, order=spc_brd))
             Hp = -(.5 * Gxx + .5 * Gxx2 + .5 * Gyy + .5 * Gyy2)
             Hzr = -(.5 * Gzz + .5 * Gzz2)
-            parm = [m, damp, epsilon, delta, theta, phi, u, v]
         else:
-            parm = [m, damp, epsilon, delta, theta, u, v]
             Gx1p = (ang0 * u.dxr - ang1 * u.dy)
             Gz1r = (ang1 * v.dxr + ang0 * v.dy)
             Gxx1 = (first_derivative(Gx1p * ang0, dim=x,

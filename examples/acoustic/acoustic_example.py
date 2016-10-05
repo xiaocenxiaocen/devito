@@ -89,7 +89,7 @@ def run(dimensions=(150, 150, 50), spacing=(20.0, 20.0, 20.0), tn=250.0,
     data.set_shape(nt, 101)
     data.set_time_axis(dt, tn)
 
-    Acoustic = Acoustic_cg(model, data, nbpml=nbpml, t_order=time_order,
+    Acoustic = Acoustic_cg(model, data, src, nbpml=nbpml, t_order=time_order,
                            s_order=space_order, auto_tuning=auto_tuning, cse=cse,
                            compiler=compiler)
 
