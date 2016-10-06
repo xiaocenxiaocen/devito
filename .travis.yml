@@ -34,8 +34,8 @@ before_install:
 
 install:
   - if [[ $TRAVIS_OS_NAME == 'osx' ]]; then brew update; brew install python; brew link --overwrite python ; fi
-  - conda install --user --yes python=$TRAVIS_PYTHON_VERSION atlas numpy scipy
-  - conda install --user -r requirements.txt
+  - conda install --yes python=$TRAVIS_PYTHON_VERSION atlas numpy scipy
+  - conda install -r requirements.txt
   - if [[ $TRAVIS_OS_NAME == 'osx' ]]; then export PATH=$PATH:$HOME/Library/Python/2.7/bin; export DEVITO_OPENMP=0; export DEVITO_ARCH=clang; fi
 
 before_script:
