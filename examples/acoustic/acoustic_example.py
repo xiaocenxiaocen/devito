@@ -50,7 +50,7 @@ def run(dimensions=(150, 150, 50), spacing=(20.0, 20.0, 20.0), tn=250.0,
     data = IShot()
     src = IShot()
     f0 = .010
-    dt = model.get_critical_dt()
+    dt = 2
     t0 = 0.0
     tn = 700.0
     nt = int(1 + (tn - t0) / dt)
@@ -94,13 +94,13 @@ def run(dimensions=(150, 150, 50), spacing=(20.0, 20.0, 20.0), tn=250.0,
                            compiler=compiler)
 
     info("Applying Forward")
-    rec, u, gflops, oi, timings = Acoustic.Forward(
-        cache_blocking=cache_blocking, save=True, cse=cse,
+    rec, u = Acoustic.Forward(
+        cache_blocking=cache_blocking, save=full_run, cse=cse,
         auto_tuning=auto_tuning, compiler=compiler
     )
 
     if not full_run:
-        return gflops, oi, timings, [rec, u.data]
+        return rec, u
 
     info("Applying Adjoint")
     Acoustic.Adjoint(rec)

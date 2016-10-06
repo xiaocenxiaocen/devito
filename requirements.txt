@@ -1,7 +1,6 @@
 flake8>=2.1.0
 sympy>=0.7.6
 numpy>=1.11.1
-scipy
 mpmath>=0.19
 pytest
 isort
