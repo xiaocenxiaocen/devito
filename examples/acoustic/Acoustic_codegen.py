@@ -5,6 +5,7 @@ import numpy as np
 
 from devito.at_controller import AutoTuner
 from examples.acoustic.fwi_operators import *
+from examples.source_type import SourceLike
 
 
 class Acoustic_cg(object):
