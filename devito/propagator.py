@@ -215,6 +215,22 @@ class Propagator(object):
         return self._cfunction
 
     @property
+    def cfunctionJ(self):
+        """Returns the JIT-compiled C function as a ctypes.FuncPtr object
+
+        Note that this invokes the JIT compilation toolchain with the
+        compiler class derived in the constructor
+
+        :returns: The generated C function
+        """
+
+        if self._lib is None:
+            self._lib = jit_compile_only(self.ccode, self.basename,
+                                             self.compiler)
+
+        return (self._lib, self.fd.name)
+
+    @property
     def timings(self):
         return self.profiler.timings
 

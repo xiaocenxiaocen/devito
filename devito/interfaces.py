@@ -437,9 +437,9 @@ class CoordinateData(SymbolicData):
             self.shape = (self.npoint, self.ndim)
             self.indices = self._indices(**kwargs)
             self.dtype = kwargs.get('dtype', np.float32)
-            self.data, self.internal_pointer = malloc_aligned(
-                self.shape, dtype=self.dtype)
-            first_touch(self)
+            # self.data, self.internal_pointer = malloc_aligned(
+            #     self.shape, dtype=self.dtype)
+            # first_touch(self)
 
     def __new__(cls, *args, **kwargs):
         ndim = kwargs.get('ndim')
@@ -493,7 +493,7 @@ class PointData(DenseData):
             self.coordinates = CoordinateData(name='%s_coords' % self.name,
                                               data=coordinates, ndim=ndim,
                                               nt=self.nt, npoint=self.npoint)
-            self.coordinates.data[:] = kwargs.get('coordinates')[:]
+            #self.coordinates.data[:] = kwargs.get('coordinates')[:]
 
     def __new__(cls, *args, **kwargs):
         nt = kwargs.get('nt')

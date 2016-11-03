@@ -207,7 +207,14 @@ def jit_compile(ccode, basename, compiler=GNUCompiler):
     :return: Path to compiled lib
     """
     src_file = "%s.cpp" % basename
-    lib_file = "%s.so" % basename
+    from sys import platform
+    if platform == "linux" or platform == "linux2":
+        lib_file = "%s.so" % basename
+    elif platform == "darwin":
+        lib_file = "%s.dylib" % basename
+    elif platform == "win32" or platform == "win64":
+        lib_file = "%s.dll" % basename
+
     log("%s: Compiling %s" % (compiler, src_file))
     extension_file_from_string(toolchain=compiler, ext_file=lib_file,
                                source_string=ccode, source_name=src_file)
@@ -225,7 +232,14 @@ def load(basename, compiler=GNUCompiler):
     Note: If the provided compiler is of type `IntelMICCompiler`
     we utilise the `pymic` package to manage device streams.
     """
-    lib_file = "%s.so" % basename
+    from sys import platform
+    print(platform)
+    if platform == "linux" or platform == "linux2":
+        lib_file = "%s.so" % basename
+    elif platform == "darwin":
+        lib_file = "%s.dylib" % basename
+    elif platform == "win32" or platform == "win64":
+        lib_file = "%s.dll" % basename
 
     if isinstance(compiler, IntelMICCompiler):
         compiler._device = compiler._mic.devices[0]
@@ -245,5 +259,16 @@ def jit_compile_and_load(ccode, basename, compiler=GNUCompiler):
     :return: The compiled library.
     """
     jit_compile(ccode, basename, compiler=compiler)
-
     return load(basename, compiler=compiler)
+
+
+def jit_compile_only(ccode, basename, compiler=GNUCompiler):
+    """JIT compile the given ccode
+
+    :param ccode: String of C source code.
+    :param basename: The string used to name various files for this compilation.
+    :param compiler: The toolchain used for compilation. GNUCompiler by default.
+    :return: The compiled library.
+    """
+    jit_compile(ccode, basename, compiler=compiler)
+    return "%s" % basename
