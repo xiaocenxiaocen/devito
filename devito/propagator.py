@@ -13,7 +13,7 @@ from sympy.utilities.iterables import postorder_traversal
 import devito.cgen_wrapper as cgen
 from devito.codeprinter import ccode
 from devito.compiler import (IntelMICCompiler, get_compiler_from_env,
-                             get_tmp_dir, jit_compile_and_load)
+                             get_tmp_dir, jit_compile_and_load, jit_compile_only)
 from devito.dimension import t, x, y, z
 from devito.expression import Expression
 from devito.function_manager import FunctionDescriptor, FunctionManager
