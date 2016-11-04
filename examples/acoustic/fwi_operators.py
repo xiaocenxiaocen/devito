@@ -115,8 +115,7 @@ class GradientOperator(Operator):
         subs = {s: model.get_critical_dt(), h: model.get_spacing()}
         # Add Gradient-specific updates. The dt2 is currently hacky
         #  as it has to match the cyclic indices
-        gradient_update = Eq(grad, grad - s**-2*(v + v.forward - 2 * v.forward.forward) *
-                             u.forward)
+        gradient_update = Eq(grad, grad - u.dt2*v.forward)
         stencils = [gradient_update, Eq(v.backward, stencil)]
         super(GradientOperator, self).__init__(rec.nt - 1, m.shape,
                                                stencils=stencils,
