@@ -41,6 +41,7 @@ class ForwardOperator(Operator):
             rho = 1
             # Derive stencil from symbolic equation
         # eqn = m / rho * u.dt2 - Lap + damp * u.dt
+        parm = [m, u, damp]
         s, h = symbols('s h')
         stencil = expand(1.0 / (2.0 * m / rho + s * damp) *
                          (4.0 * m / rho * u + (s * damp - 2.0 * m / rho) *
@@ -54,6 +55,7 @@ class ForwardOperator(Operator):
                                               time_order=time_order,
                                               forward=True,
                                               dtype=m.dtype,
+                                              input_params=parm,
                                               **kwargs)
 
         # Insert source and receiver terms post-hoc
@@ -144,7 +146,7 @@ class AdjointOperator(Operator):
         stencil = 1.0 / (2.0 * m / rho + s * damp) * \
             (4.0 * m / rho * v + (s * damp - 2.0 * m / rho) *
              v.forward + 2.0 * s**2 * Lap)
-
+        parm = [m, v, damp]
         # Add substitutions for spacing (temporal and spatial)
         subs = {s: model.get_critical_dt(), h: model.get_spacing()}
         super(AdjointOperator, self).__init__(nt, m.shape,
@@ -154,6 +156,7 @@ class AdjointOperator(Operator):
                                               time_order=time_order,
                                               forward=False,
                                               dtype=m.dtype,
+                                              input_params=parm,
                                               **kwargs)
 
         # Insert source and receiver terms post-hoc
@@ -321,7 +324,7 @@ class BornOperator(Operator):
 
         # Add substitutions for spacing (temporal and spatial)
         subs = {s: dt, h: model.get_spacing()}
-
+        parm = [m, u, damp]
         # Add Born-specific updates and resets
         stencils = [Eq(u.forward, first_stencil), Eq(U.forward, second_stencil)]
         super(BornOperator, self).__init__(nt, m.shape,
@@ -331,6 +334,7 @@ class BornOperator(Operator):
                                            time_order=time_order,
                                            forward=True,
                                            dtype=m.dtype,
+                                           input_params=parm,
                                            **kwargs)
 
         # Insert source and receiver terms post-hoc
