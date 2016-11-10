@@ -5,10 +5,6 @@ import os
 from scipy import ndimage
 import numpy as np
 
-sys.path.append('/Users/ggorman/projects/opesci/devito/')
-sys.path.append('/Users/ggorman/projects/opesci/examples/')
-sys.path.append('/Users/ggorman/projects/opesci/acoustic/')
-
 from examples.containers import IShot, IGrid
 from examples.acoustic.Acoustic_codegen import Acoustic_cg
 from devito import clear_cache
