@@ -42,12 +42,14 @@ class demo:
 
     # Show the shot record at the receivers.
     def plot_record(self, rec):
-        limit = 0.1*max(abs(numpy.min(rec)), abs(numpy.max(rec)))
+        limit = 0.05*max(abs(numpy.min(rec)), abs(numpy.max(rec)))
         l = plt.imshow(rec, vmin=-limit, vmax=limit,
-                aspect=float(rec.shape[1])/rec.shape[0],
                 cmap=cm.gray,
                 extent=[self.origin[0], self.origin[0]+self.dimensions[0]*self.spacing[0],
-                    tn, t0])
+                    self.tn, self.t0])
+        plt.axis('auto')
+        plt.xlabel('X position (m)')
+        plt.ylabel('Time (ms)')
         plt.colorbar(l, extend='max')
         plt.show()
 
