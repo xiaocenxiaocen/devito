@@ -22,6 +22,8 @@ class demo:
     origin = None
     spacing = None
     dimensions = None
+    t0 = None
+    tn = None
 
     # Source function: Set up the source as Ricker wavelet for f0
     def _source(self, t, f0):
@@ -30,13 +32,11 @@ class demo:
 
     # Plot velocity
     def plot_velocity(self, vp, vmin=1.5, vmax=4, cmap=cm.seismic):
-        l = plt.imshow(numpy.transpose(vp), vmin=1.5, vmax=4, cmap=cm.seismic)
-        plt.axis(v=[self.origin[0], self.origin[0]+self.dimensions[0]*self.spacing[0],
+        l = plt.imshow(numpy.transpose(vp), vmin=1.5, vmax=4, cmap=cm.seismic,
+                    extent=[self.origin[0], self.origin[0]+self.dimensions[0]*self.spacing[0],
                     self.origin[1]+self.dimensions[1]*self.spacing[1], self.origin[1]])
         plt.xlabel('X position (m)')
         plt.ylabel('Depth (m)')
-        plt.axis(v=[self.origin[0], self.origin[0]+self.dimensions[0]*self.spacing[0],
-                    self.origin[1]+self.dimensions[1]*self.spacing[1], self.origin[1]])
         plt.colorbar(l, shrink=.25)
         plt.show()
 
@@ -45,9 +45,9 @@ class demo:
         limit = 0.1*max(abs(numpy.min(rec)), abs(numpy.max(rec)))
         l = plt.imshow(rec, vmin=-limit, vmax=limit,
                 aspect=float(rec.shape[1])/rec.shape[0],
-                cmap=cm.gray)
-        plt.axis(v=[self.origin[0], self.origin[0]+self.dimensions[0]*self.spacing[0],
-                    self.origin[1]+self.dimensions[1]*self.spacing[1], self.origin[1]])
+                cmap=cm.gray,
+                extent=[self.origin[0], self.origin[0]+self.dimensions[0]*self.spacing[0],
+                    tn, t0])
         plt.colorbar(l, extend='max')
         plt.show()
 
@@ -81,7 +81,7 @@ class marmousi2D(demo):
         self.dimensions = dimensions = (1601, 401)
         self.origin = origin = (0., 0.)
         self.spacing = spacing = (7.5, 7.5)
-        self.nsrc = 101
+        self.nsrc = 1001    
         self.spc_order = 10
 
         # Read velocity
@@ -108,10 +108,10 @@ class marmousi2D(demo):
         # Set up receivers
         self.data = data = IShot()
 
-        f0 = .015
+        f0 = .025
         self.dt = dt = self.model.get_critical_dt()
-        t0 = 0.0
-        tn = 4000
+        self.t0 = t0 = 0.0
+        self.tn = tn = 4000
         nt = int(1+(tn-t0)/dt)
 
         self.time_series = 1.0e-3*self._source(numpy.linspace(t0, tn, nt), f0)
