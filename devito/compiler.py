@@ -208,6 +208,8 @@ def jit_compile(ccode, basename, compiler=GNUCompiler):
     """
     src_file = "%s.cpp" % basename
     lib_file = "%s.so" % basename
+    if path.exists(lib_file):
+	return lib_file
     log("%s: Compiling %s" % (compiler, src_file))
     extension_file_from_string(toolchain=compiler, ext_file=lib_file,
                                source_string=ccode, source_name=src_file)

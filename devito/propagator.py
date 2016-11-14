@@ -172,8 +172,7 @@ class Propagator(object):
 
         :returns: The basename path as a string
         """
-        string = "%s-%s" % (str(self.fd.params), randint(0, 100000000))
-
+        string = "%s" % (str(self.fd.params)) #This implies caching. Verify whether caching works perfectly before merging to master
         return path.join(get_tmp_dir(), sha1(string).hexdigest())
 
     @property
