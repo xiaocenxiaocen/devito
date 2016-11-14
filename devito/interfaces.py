@@ -188,7 +188,7 @@ class DenseData(SymbolicData):
             debug("Allocating memory for %s (%s)" % (self.name, str(self.shape)))
             self._data, self.internal_pointer = malloc_aligned(
                 self.shape, dtype=self.dtype)
-            first_touch(self)
+            # first_touch(self)
 
     def __del__(self):
         if self.internal_pointer is not None:
@@ -439,7 +439,7 @@ class CoordinateData(SymbolicData):
             self.dtype = kwargs.get('dtype', np.float32)
             self.data, self.internal_pointer = malloc_aligned(
                 self.shape, dtype=self.dtype)
-            first_touch(self)
+            # first_touch(self)
 
     def __new__(cls, *args, **kwargs):
         ndim = kwargs.get('ndim')
