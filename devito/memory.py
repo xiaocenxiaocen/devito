@@ -47,6 +47,7 @@ def malloc_aligned(shape, alignment=None, dtype=np.float32):
     )
 
     pointer = np.ctypeslib.as_array(data_pointer, shape=shape)
+    pointer.fill(0)
     return (pointer, data_pointer)
 
 
