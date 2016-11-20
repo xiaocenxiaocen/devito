@@ -155,9 +155,9 @@ class BornOperator(Operator):
                          dtype=damp.dtype, nbpml=model.nbpml)
 
         # Derive stencils from symbolic equation
-        first_eqn = m * u.dt2 - u.laplace - damp * u.dt
+        first_eqn = m * u.dt2 - u.laplace + damp * u.dt
         first_stencil = solve(first_eqn, u.forward)[0]
-        second_eqn = m * U.dt2 - U.laplace - damp * U.dt
+        second_eqn = m * U.dt2 - U.laplace + damp * U.dt - dm * u.dt2
         second_stencil = solve(second_eqn, U.forward)[0]
 
         # Add substitutions for spacing (temporal and spatial)
@@ -165,10 +165,7 @@ class BornOperator(Operator):
         subs = {s: src.dt, h: src.h}
 
         # Add Born-specific updates and resets
-        src2 = -(src.dt**-2) * (- 2 * u + u.forward + u.backward) * dm
-        insert_second_source = Eq(U, U + (src.dt * src.dt) / m*src2)
-        stencils = [Eq(u.forward, first_stencil), Eq(U.forward, second_stencil),
-                    insert_second_source]
+        stencils = [Eq(u.forward, first_stencil), Eq(U.forward, second_stencil)]
         super(BornOperator, self).__init__(src.nt, m.shape,
                                            stencils=stencils,
                                            subs=[subs, subs, {}, {}],
