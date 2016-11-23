@@ -8,6 +8,18 @@ from examples.source_type import SourceLike
 
 
 class ForwardOperator(Operator):
+    """
+    Class to setup the forward modelling operator in an acoustic media
+
+    :param model: IGrid() object containing the physical parameters
+    :param src: None ot IShot() (not currently supported properly)
+    :param damp: Dampening coeeficents for the ABCs
+    :param data: IShot() object containing the acquisition geometry and field data
+    :param: time_order: Time discretization order
+    :param: spc_order: Space discretization order
+    :param: trigonometry : COS/SIN functions choice. The default is to use C functions
+    `Bhaskara` uses a rational approximation.
+    """
     def __init__(self, model, src, damp, data, time_order=2, spc_order=4, save=False,
                  trigonometry='normal', **kwargs):
         nt, nrec = data.shape
@@ -94,10 +106,10 @@ class ForwardOperator(Operator):
             else:
                 return Bhaskarasin(angle + 1.5708)
 
+        s, h = symbols('s h')
+
         ccos = Bhaskaracos if trigonometry == 'Bhaskara' else cos
         ssin = Bhaskarasin if trigonometry == 'Bhaskara' else sin
-
-        s, h = symbols('s h')
 
         ang0 = ccos(theta)
         ang1 = ssin(theta)
