@@ -56,12 +56,6 @@ def run(dimensions=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=1000.0,
     t0 = 0.0
     nt = int(1+(tn-t0)/dt)
 
-    time_series = source(np.linspace(t0, tn, nt), f0)
-    location = (origin[0] + dimensions[0] * spacing[0] * 0.5,
-                origin[1] + dimensions[1] * spacing[1] * 0.5,
-                origin[2] + 2 * spacing[2])
-    data.set_source(time_series, dt, location)
-
     def source(t, f0):
         r = (np.pi * f0 * (t - 1. / f0))
         return (1 - 2. * r ** 2) * np.exp(-r ** 2)

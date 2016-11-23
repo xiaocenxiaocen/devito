@@ -18,9 +18,10 @@ class IGrid:
     :param: theta: Tilt angle in radian
     :param phi : Asymuth angle in radian
     """
-    def __init__(self, origin, spacing, vp, epsilon=None,
+    def __init__(self, origin, spacing, vp, rho=None, epsilon=None,
                  delta=None, theta=None, phi=None):
         self.vp = vp
+        self.rho = rho
         self.spacing = spacing
         self.dimensions = vp.shape
         if epsilon is not None:

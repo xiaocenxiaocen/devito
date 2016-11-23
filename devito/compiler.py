@@ -234,7 +234,7 @@ def load(basename, compiler=GNUCompiler):
     we utilise the `pymic` package to manage device streams.
     """
     from sys import platform
-    print(platform)
+
     if platform == "linux" or platform == "linux2":
         lib_file = "%s.so" % basename
     elif platform == "darwin":
