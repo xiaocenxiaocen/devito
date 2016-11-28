@@ -5,7 +5,6 @@ import numpy as np
 
 from devito.at_controller import AutoTuner
 from examples.acoustic.fwi_operators import *
-from examples.source_type import SourceLike
 
 
 class Acoustic_cg(object):
@@ -14,7 +13,7 @@ class Acoustic_cg(object):
 
     Note: s_order must always be greater than t_order
     """
-    def __init__(self, model, data, source=None, nbpml=40, t_order=2, s_order=2,
+    def __init__(self, model, data, source, nbpml=40, t_order=2, s_order=2,
                  auto_tuning=False, dse=True, compiler=None):
         self.model = model
         self.t_order = t_order
@@ -41,7 +40,7 @@ class Acoustic_cg(object):
             num_dim = len(damp.shape)
 
             for i in range(nbpml):
-                pos = np.abs((nbpml-i+1)/float(nbpml))
+                pos = np.abs((nbpml-i)/float(nbpml))
                 val = dampcoeff * (pos - np.sin(2*np.pi*pos)/(2*np.pi))
 
                 if num_dim == 2:

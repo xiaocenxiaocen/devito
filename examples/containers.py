@@ -4,15 +4,13 @@ from scipy import interpolate
 
 
 class IGrid:
-    def __init__(self, *args, **kwargs):
-        self.nbpml = kwargs.get('nbpml', 40)
-
     """
     Class to setup a physical model
 
     :param origin: Origin of the model in m as a Tuple
     :param spacing:grid size in m as a Tuple
     :param vp: Velocity in km/s
+    :param rho: Density in kg/cm^3 (rho=1 for water)
     :param epsilon: Thomsen epsilon parameter (0<epsilon<1)
     :param delta: Thomsen delta parameter (0<delta<1), delta<epsilon
     :param: theta: Tilt angle in radian
@@ -24,18 +22,22 @@ class IGrid:
         self.rho = rho
         self.spacing = spacing
         self.dimensions = vp.shape
+
         if epsilon is not None:
             self.epsilon = 1 + 2 * epsilon
             self.scale = np.sqrt(1 + 2 * np.max(self.epsilon))
         else:
             self.scale = 1
+            self.epsilon = None
+
         if delta is not None:
             self.delta = np.sqrt(1 + 2 * delta)
-        if phi is not None:
-            self.phi = phi
-        if theta is not None:
-            self.theta = theta
+        else:
+            self.delta = None
 
+        self.phi = phi
+        self.theta = theta
+        self.rho = rho
         self.origin = origin
 
     def get_shape(self):
@@ -72,43 +74,14 @@ class IGrid:
         """Return the grid size"""
         return self.spacing[0]
 
-    def create_model(self, origin, spacing, vp, rho=None,
-                     epsilon=None,
-                     delta=None, theta=None, phi=None):
-        self.vp = vp
-        self.spacing = spacing
-        self.dimensions = vp.shape
-        if epsilon is not None:
-            self.epsilon = 1 + 2 * epsilon
-            self.scale = np.sqrt(1 + 2 * np.max(self.epsilon))
-        else:
-            self.scale = 1
-            self.epsilon = None
-
-        if delta is not None:
-            self.delta = np.sqrt(1 + 2 * delta)
-        else:
-            self.delta = None
-
-        if phi is not None:
-            self.phi = phi
-        else:
-            self.phi = None
-
-        if theta is not None:
-            self.theta = theta
-        else:
-            self.theta = None
-
-        if rho is not None:
-            self.rho = rho
-        else:
-            self.rho = None
-
-        self.origin = origin
-
     def set_vp(self, vp):
-        self.vp = vp
+        """Set a new velocity model
+        :param vp : new velocity in km/s"""
+        if vp.shape == self.dimensions:
+            self.vp = vp
+        else:
+            self.vp = vp
+            self.dimensions = vp.shape
 
     def set_origin(self, shift):
         """Set a new origin shifted by -shift in every direction

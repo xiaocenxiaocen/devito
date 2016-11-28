@@ -7,17 +7,33 @@ from examples.source_type import SourceLike
 
 
 class ForwardOperator(Operator):
+    """
+    Class to setup the forward modelling operator in an acoustic media
+
+    :param model: IGrid() object containing the physical parameters
+    :param src: None ot IShot() (not currently supported properly)
+    :param damp: Dampening coeeficents for the ABCs
+    :param data: IShot() object containing the acquisition geometry and field data
+    :param: time_order: Time discretization order
+    :param: spc_order: Space discretization order
+    :param save : Saving flag, True saves all time steps, False only the three
+     required for the time marching scheme
+    """
     def __init__(self, model, src, damp, data, time_order=2, spc_order=6,
                  save=False, **kwargs):
         nt, nrec = data.shape
         nt, nsrc = src.shape
         dt = model.get_critical_dt()
+        nt, nrec = data.shape
+        nt, nsrc = src.shape
+        s, h = symbols('s h')
         u = TimeData(name="u", shape=model.get_shape_comp(), time_dim=nt,
                      time_order=time_order, space_order=spc_order, save=save,
                      dtype=damp.dtype)
         m = DenseData(name="m", shape=model.get_shape_comp(), dtype=damp.dtype)
         m.data[:] = model.padm()
         u.pad_time = save
+        # Receiver initialization
         rec = SourceLike(name="rec", npoint=nrec, nt=nt, dt=dt, h=model.get_spacing(),
                          coordinates=data.receiver_coords, ndim=len(damp.shape),
                          dtype=damp.dtype, nbpml=model.nbpml)
@@ -51,8 +67,8 @@ class ForwardOperator(Operator):
         super(ForwardOperator, self).__init__(nt, m.shape,
                                               stencils=Eq(u.forward, stencil),
                                               subs=subs,
-                                              spc_border=spc_order/2,
-                                              time_order=time_order,
+                                              spc_border=max(spc_order, 2),
+                                              time_order=2,
                                               forward=True,
                                               dtype=m.dtype,
                                               input_params=parm,
@@ -208,6 +224,17 @@ class AadjOperator(Operator):
 
 
 class GradientOperator(Operator):
+    """
+    Class to setup the gradient operator in an acoustic media
+
+    :param model: IGrid() object containing the physical parameters
+    :param src: None ot IShot() (not currently supported properly)
+    :param damp: Dampening coeeficents for the ABCs
+    :param data: IShot() object containing the acquisition geometry and field data
+    :param: recin : receiver data for the adjoint source
+    :param: time_order: Time discretization order
+    :param: spc_order: Space discretization order
+    """
     def __init__(self, model, damp, data, recin, u, time_order=2, spc_order=6, **kwargs):
         nt, nrec = data.shape
         dt = model.get_critical_dt()
@@ -268,6 +295,18 @@ class GradientOperator(Operator):
 
 
 class BornOperator(Operator):
+    """
+    Class to setup the linearized modelling operator in an acoustic media
+
+    :param model: IGrid() object containing the physical parameters
+    :param src: None ot IShot() (not currently supported properly)
+    :param damp: Dampening coeeficents for the ABCs
+    :param data: IShot() object containing the acquisition geometry and field data
+    :param: dmin : square slowness perturbation
+    :param: recin : receiver data for the adjoint source
+    :param: time_order: Time discretization order
+    :param: spc_order: Space discretization order
+    """
     def __init__(self, model, src, damp, data, dmin, time_order=2, spc_order=6, **kwargs):
         nt, nrec = data.shape
         nt, nsrc = src.shape

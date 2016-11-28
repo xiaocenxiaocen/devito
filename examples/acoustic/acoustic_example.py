@@ -40,7 +40,7 @@ def run(dimensions=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=1000.0,
     # Smooth velocity
     initial_vp = smooth10(true_vp, dimensions)
 
-    dm = true_vp**-2 - initial_vp**-2
+    dm = 1. / (true_vp * true_vp) - 1. / (initial_vp * initial_vp)
 
     model = IGrid(origin, spacing, true_vp)
 
@@ -60,27 +60,20 @@ def run(dimensions=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=1000.0,
         r = (np.pi * f0 * (t - 1. / f0))
         return (1 - 2. * r ** 2) * np.exp(-r ** 2)
 
-    # Source geometry
-    time_series = np.zeros((nt, 1))
-
     time_series[:, 0] = source(np.linspace(t0, tn, nt), f0)
-    # time_series[:, 1] = source(np.linspace(t0 + 50, tn, nt), f0)
 
     location = np.zeros((1, 3))
     location[0, 0] = origin[0] + dimensions[0] * spacing[0] * 0.5
-    location[0, 1] = origin[1] + dimensions[1] * spacing[1] * 0.3
-    location[0, 2] = origin[1] + dimensions[1] * spacing[1] * 0.5
-    # location[1, 0] = origin[0] + dimensions[0] * spacing[0] * 0.6
-    # location[1, 1] = origin[1] + dimensions[1] * spacing[1] * 0.6
-    # location[1, 2] = origin[1] + 2 * spacing[1]
-
+    location[0, 1] = origin[1] + dimensions[1] * spacing[1] * 0.5
+    location[0, 2] = origin[1] + 2 * spacing[2]
     src.set_receiver_pos(location)
     src.set_shape(nt, 1)
     src.set_traces(time_series)
-    src.set_time_axis(dt, tn)
+
     # Receiver geometry
     receiver_coords = np.zeros((101, 3))
-    receiver_coords[:, 0] = np.linspace(50, 950, num=101)
+    receiver_coords[:, 0] = np.linspace(0, origin[0] +
+                                        dimensions[0] * spacing[0], num=101)
     receiver_coords[:, 1] = origin[1] + dimensions[1] * spacing[1] * 0.5
     receiver_coords[:, 2] = location[0, 1]
     data.set_receiver_pos(receiver_coords)
