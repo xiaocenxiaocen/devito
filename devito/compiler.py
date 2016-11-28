@@ -237,7 +237,7 @@ def jit_compile(ccode, basename, compiler=GNUCompiler):
     :param compiler: The toolchain used for compilation. GNUCompiler by default.
     :return: Path to compiled lib
     """
-    src_file = "%s.cpp" % basename
+    src_file = "%s.%s" % (basename, compiler.src_ext)
     from sys import platform
     if platform == "linux" or platform == "linux2":
         lib_file = "%s.so" % basename
