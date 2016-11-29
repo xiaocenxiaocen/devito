@@ -90,8 +90,7 @@ class marmousi2D(demo):
         vp = numpy.fromfile(filename, dtype='float32', sep="")
         vp = vp.reshape(self.dimensions)
 
-        self.model = IGrid()
-        self.model.create_model(self.origin, self.spacing, vp)
+        self.model = IGrid(self.origin, self.spacing, vp)
 
         # Smooth true model to create starting model.
         smooth_vp = ndimage.gaussian_filter(vp, sigma=(6, 6), order=0)
@@ -104,8 +103,7 @@ class marmousi2D(demo):
         # Inforce water layer velocity
         smooth_vp[:,1:29] = vp[:,1:29]
 
-        self.model0 = model0 = IGrid()
-        model0.create_model(origin, spacing, smooth_vp)
+        self.model0 = model0 = IGrid(origin, spacing, smooth_vp)
 
         # Set up receivers
         self.data = data = IShot()
@@ -166,8 +164,7 @@ class small_marmousi2D(demo):
         vp = vp[101, :, :]
         self.dimensions = self.dimensions[1:]
 
-        self.model = IGrid()
-        self.model.create_model(self.origin, self.spacing, vp)
+        self.model = IGrid(self.origin, self.spacing, vp)
 
         # Smooth true model to create starting model.
         smooth_vp = ndimage.gaussian_filter(self.model.vp, sigma=(2, 2), order=0)
@@ -177,8 +174,7 @@ class small_marmousi2D(demo):
         truc = (self.model.vp <= (numpy.min(self.model.vp)+.01))
         smooth_vp[truc] = self.model.vp[truc]
 
-        self.model0 = IGrid()
-        self.model0.create_model(self.origin, self.spacing, smooth_vp)
+        self.model0 = IGrid(self.origin, self.spacing, smooth_vp)
 
         # Set up receivers
         self.data = IShot()
@@ -257,8 +253,7 @@ class small_phantoms2D(demo):
         for i in range(sf_grid_depth):
             smooth_vp[i][:] = 1500.  # m/s water velocity
         smooth_vp = smooth_vp*1.0e-3  # Convert to km/s
-        self.model0 = IGrid()
-        self.model0.create_model(origin, spacing, smooth_vp)
+        self.model0 = IGrid(origin, spacing, smooth_vp)
 
         # Reflectors: Add circular positive velocity anomaly.
         radius = int(500./spacing[0])
@@ -296,8 +291,7 @@ class small_phantoms2D(demo):
 
         vp = blended_model * 1.0e-3  # Convert to km/s
 
-        self.model = IGrid()
-        self.model.create_model(origin, spacing, vp)
+        self.model = IGrid(origin, spacing, vp)
 
         # Define seismic data.
         self.data = data = IShot()
