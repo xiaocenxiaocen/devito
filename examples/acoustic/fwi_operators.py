@@ -4,7 +4,7 @@ from devito.dimension import t
 from devito.interfaces import DenseData, TimeData
 from devito.operator import *
 from examples.source_type import SourceLike
-
+import numpy as np
 
 class ForwardOperator(Operator):
     """
@@ -58,7 +58,7 @@ class ForwardOperator(Operator):
         source = SourceLike(name="src", npoint=nsrc, nt=nt, dt=dt, h=model.get_spacing(),
                             coordinates=src.receiver_coords, ndim=len(damp.shape),
                             dtype=damp.dtype, nbpml=model.nbpml)
-        source.data[:] = src.traces[:]
+        source.data[:] = np.reshape(src.traces[:], (src.traces.size, 1))
 
         super(ForwardOperator, self).__init__(nt, m.shape,
                                               stencils=Eq(u.forward, stencil),

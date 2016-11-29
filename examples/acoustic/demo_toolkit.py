@@ -112,7 +112,7 @@ class marmousi2D(demo):
         self.dt = dt = self.model.get_critical_dt()
         self.t0 = t0 = 0.0
         self.tn = tn = 4000
-        nt = int(1+(tn-t0)/dt)
+        self.nt = nt = int(1+(tn-t0)/dt)
 
         self.time_series = 1.0e-3*self._source(numpy.linspace(t0, tn, nt), f0)
 
@@ -131,11 +131,17 @@ class marmousi2D(demo):
         return self.model0
 
     def get_shot(self, i):
-        location = (self.sources[i], self.origin[1] + 2 * self.spacing[1])
-        self.data.set_source(self.time_series, self.dt, location)
+        location = numpy.zeros((1, 2))
+        location[0, 0] = self.sources[i]
+        location[0, 1] = self.origin[1] + 2 * self.spacing[1]
 
-        Acoustic = Acoustic_cg(self.model, self.data, t_order=2, s_order=self.spc_order)
-        rec, u, gflopss, oi, timings = Acoustic.Forward(save=False, cse=True)
+        src = IShot()
+        src.set_receiver_pos(location)
+        src.set_shape(self.nt, 1)
+        src.set_traces(self.time_series)
+
+        Acoustic = Acoustic_cg(self.model, self.data, src, t_order=2, s_order=self.spc_order)
+        rec, u, gflopss, oi, timings = Acoustic.Forward(save=False, dse=True)
 
         return self.data, rec
 

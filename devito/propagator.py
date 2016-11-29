@@ -485,7 +485,7 @@ class Propagator(object):
         for item in flatten([stencil.free_symbols for stencil in stencils]):
             if (
                 str(item) not in factorized
-                and item not in self._mapper.values() + time_steppers
+                and item not in list(self._mapper.values()) + time_steppers
                 and str(item).find("temp") == -1
             ):
                 array_names.add(item)
