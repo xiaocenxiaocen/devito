@@ -143,7 +143,7 @@ class marmousi2D(demo):
         Acoustic = Acoustic_cg(self.model, self.data, src, t_order=2, s_order=self.spc_order)
         rec, u, gflopss, oi, timings = Acoustic.Forward(save=False, dse=True)
 
-        return self.data, rec
+        return self.data, rec, src
 
 
 class small_marmousi2D(demo):
