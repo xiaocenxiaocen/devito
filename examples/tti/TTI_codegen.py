@@ -4,33 +4,23 @@ from __future__ import print_function
 import numpy as np
 
 from devito.at_controller import AutoTuner
-from examples.source_type import SourceLike
 from examples.tti.tti_operators import *
 
 
 class TTI_cg:
-    """ Class to setup the problem for the Acoustic Wave
+    """ Class to setup the problem for the anisotropic Wave
         Note: s_order must always be greater than t_order
     """
-    def __init__(self, model, data, source=None, t_order=2, s_order=2, nbpml=40,
-                 save=False):
+    def __init__(self, model, data, source, t_order=2, s_order=2, nbpml=40):
         self.model = model
         self.t_order = t_order
         self.s_order = s_order
         self.data = data
+        self.src = source
         self.dtype = np.float32
         self.dt = model.get_critical_dt()
         self.model.nbpml = nbpml
         self.model.set_origin(nbpml)
-        self.data.reinterpolate(self.dt)
-
-        if source is not None:
-            self.source = source.read()
-            self.source.reinterpolate(self.dt)
-            source_time = self.source.traces[0, :]
-            while len(source_time) < self.data.nsamples:
-                source_time = np.append(source_time, [0.0])
-            self.data.set_source(source_time, self.dt, self.data.source_coords)
 
         def damp_boundary(damp):
             h = self.model.get_spacing()
@@ -57,24 +47,23 @@ class TTI_cg:
                               dtype=self.dtype)
         # Initialize damp by calling the function that can precompute damping
         damp_boundary(self.damp.data)
-        srccoord = np.array(self.data.source_coords, dtype=self.dtype)[np.newaxis, :]
-        self.src = SourceLike(name="src", npoint=1, nt=data.shape[1],
-                              dt=self.dt, h=self.model.get_spacing(),
-                              coordinates=srccoord, ndim=len(self.damp.shape),
-                              dtype=self.dtype, nbpml=nbpml)
-        self.src.data[:] = data.get_source()[:, np.newaxis]
 
-    def Forward(self, save=False, cse=True, auto_tuning=False,
+        if len(self.damp.shape) == 2 and self.src.receiver_coords.shape[1] == 3:
+            self.src.receiver_coords = np.delete(self.src.receiver_coords, 1, 1)
+        if len(self.damp.shape) == 2 and self.data.receiver_coords.shape[1] == 3:
+            self.data.receiver_coords = np.delete(self.data.receiver_coords, 1, 1)
+
+    def Forward(self, save=False, dse='advanced', auto_tuning=False,
                 cache_blocking=None, compiler=None):
         fw = ForwardOperator(self.model, self.src, self.damp, self.data,
                              time_order=self.t_order, spc_order=self.s_order,
                              profile=True, save=save, cache_blocking=cache_blocking,
-                             cse=cse, compiler=compiler)
+                             dse=dse, compiler=compiler)
 
         if auto_tuning:
             fw_new = ForwardOperator(self.model, self.src, self.damp, self.data,
                                      time_order=self.t_order, spc_order=self.s_order,
-                                     profile=True, save=save, cse=cse, compiler=compiler)
+                                     profile=True, save=save, dse=dse, compiler=compiler)
 
             at = AutoTuner(fw_new)
             at.auto_tune_blocks(self.s_order + 1, self.s_order * 4 + 2)
@@ -83,10 +72,3 @@ class TTI_cg:
         u, v, rec = fw.apply()
         return (rec.data, u.data, v.data,
                 fw.propagator.gflopss, fw.propagator.oi, fw.propagator.timings)
-
-    def Adjoint(self, rec, cache_blocking=None):
-        adj = AdjointOperator(self.model, self.damp, self.data, rec,
-                              time_order=self.t_order, spc_order=self.s_order,
-                              cache_blocking=cache_blocking)
-        srca = adj.apply()[0]
-        return srca.data

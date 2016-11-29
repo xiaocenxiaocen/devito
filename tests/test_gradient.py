@@ -2,20 +2,19 @@ import numpy as np
 import pytest
 from numpy import linalg
 
+from devito import clear_cache
 from examples.acoustic.Acoustic_codegen import Acoustic_cg
 from examples.containers import IGrid, IShot
 
 
 @pytest.mark.xfail(reason='Numerical accuracy with np.float32')
 class TestGradient(object):
-    @pytest.fixture(params=[(70, 80), (60, 70, 80)])
+    @pytest.fixture(params=[(70, 80)])
     def acoustic(self, request, time_order, space_order):
-        model = IGrid()
-        model0 = IGrid()
         dimensions = request.param
         # dimensions are (x,z) and (x, y, z)
         origin = tuple([0]*len(dimensions))
-        spacing = tuple([15]*len(dimensions))
+        spacing = tuple([10]*len(dimensions))
 
         # velocity models
         def smooth10(vel):
@@ -31,18 +30,22 @@ class TestGradient(object):
         # True velocity
         true_vp = np.ones(dimensions) + .5
         if len(dimensions) == 2:
-            true_vp[:, int(dimensions[1] / 3):] = 2.5
+            true_vp[:, int(dimensions[1] / 2):] = 2
         else:
-            true_vp[:, :, int(dimensions[2] / 3):] = 2.5
+            true_vp[:, :, int(dimensions[2] / 2):] = 2
         # Smooth velocity
         initial_vp = smooth10(true_vp)
         dm = true_vp**-2 - initial_vp**-2
-        model.create_model(origin, spacing, true_vp)
-        model0.create_model(origin, spacing, initial_vp)
+        model = IGrid(origin, spacing, true_vp)
+        model0 = IGrid(origin, spacing, initial_vp)
         # Define seismic data.
         data = IShot()
+        src = IShot()
         f0 = .010
-        dt = model.get_critical_dt()
+        if time_order == 4:
+            dt = 1.73 * model.get_critical_dt()
+        else:
+            dt = model.get_critical_dt()
         t0 = 0.0
         tn = 500.0
         nt = int(1+(tn-t0)/dt)
@@ -52,26 +55,34 @@ class TestGradient(object):
             r = (np.pi * f0 * (t - 1./f0))
             return (1-2.*r**2)*np.exp(-r**2)
 
-        time_series = source(np.linspace(t0, tn, nt), f0)
-        location = (origin[0] + dimensions[0] * spacing[0] * 0.5,
-                    origin[-1] + 2 * spacing[-1])
+        # Source geometry
+        time_series = np.zeros((nt, 1))
+        time_series[:, 0] = source(np.linspace(t0, tn, nt), f0)
+
+        location = np.zeros((1, 3))
+        location[0, 0] = origin[0] + dimensions[0] * spacing[0] * 0.5
+        location[0, 1] = origin[1] + 2 * spacing[1]
         if len(dimensions) == 3:
-            location = (location[0], origin[1] + dimensions[1] * spacing[1] * 0.5,
-                        location[1])
-        data.set_source(time_series, dt, location)
-        receiver_coords = np.zeros((50, len(dimensions)))
-        receiver_coords[:, 0] = np.linspace(50, origin[0] + dimensions[0]*spacing[0] - 50,
-                                            num=50)
-        receiver_coords[:, -1] = location[-1]
+            location[0, 1] = origin[1] + dimensions[1] * spacing[1] * 0.5
+            location[0, 2] = origin[1] + 2 * spacing[2]
+        src.set_receiver_pos(location)
+        src.set_shape(nt, 1)
+        src.set_traces(time_series)
+
+        receiver_coords = np.zeros((101, 3))
+        receiver_coords[:, 0] = np.linspace(0, origin[0] +
+                                            dimensions[0] * spacing[0], num=101)
+        receiver_coords[:, 1] = location[0, 1]
         if len(dimensions) == 3:
-            receiver_coords[:, 1] = location[1]
+            receiver_coords[:, 1] = origin[1] + dimensions[1] * spacing[1] * 0.5
+            receiver_coords[:, 2] = location[0, 2]
         data.set_receiver_pos(receiver_coords)
-        data.set_shape(nt, 50)
+        data.set_shape(nt, 101)
         # Adjoint test
-        wave_true = Acoustic_cg(model, data, None, t_order=time_order,
-                                s_order=space_order, nbpml=10)
-        wave_0 = Acoustic_cg(model0, data, None, t_order=time_order,
-                             s_order=space_order, nbpml=10)
+        wave_true = Acoustic_cg(model, data, src, t_order=time_order,
+                                s_order=space_order, nbpml=40)
+        wave_0 = Acoustic_cg(model0, data, src, t_order=time_order,
+                             s_order=space_order, nbpml=40)
         return wave_true, wave_0, dm, initial_vp
 
     @pytest.fixture(params=[2])
@@ -83,6 +94,7 @@ class TestGradient(object):
         return request.param
 
     def test_grad(self, acoustic):
+        clear_cache()
         rec = acoustic[0].Forward()[0]
         rec0, u0, _, _, _ = acoustic[1].Forward(save=True)
         F0 = .5*linalg.norm(rec0 - rec)**2
@@ -115,9 +127,10 @@ class TestGradient(object):
         assert np.isclose(p1[0], 1.0, rtol=0.05)
         assert np.isclose(p2[0], 2.0, rtol=0.05)
 
+
 if __name__ == "__main__":
     t = TestGradient()
     request = type('', (), {})()
-    request.param = (60, 70, 80)
-    ac = t.acoustic(request, 2, 12)
+    request.param = (60, 70)
+    ac = t.acoustic(request, 2, 4)
     t.test_grad(ac)

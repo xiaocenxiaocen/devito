@@ -2,13 +2,13 @@ from __future__ import absolute_import
 
 import ctypes
 from ctypes.util import find_library
+from functools import reduce
 from operator import mul
 
 import numpy as np
 from sympy import Eq
-from sympy.abc import p
 
-from devito.iteration import Iteration
+from devito.dimension import p
 from devito.logger import error
 from devito.tools import convert_dtype_to_ctype
 
@@ -65,6 +65,7 @@ def first_touch(array):
     """
     from devito.propagator import Propagator
     from devito.interfaces import TimeData, PointData
+    from devito.iteration import Iteration
 
     exp_init = [Eq(array.indexed[array.indices], 0)]
     it_init = []
@@ -75,7 +76,7 @@ def first_touch(array):
         space_dims = array.indices[1:]
     else:
         if isinstance(array, PointData):
-            it_init = [Iteration(exp_init, index=p, limits=array.shape[1])]
+            it_init = [Iteration(exp_init, dimension=p, limits=array.shape[1])]
             exp_init = []
             time_steps = array.shape[0]
             shape = []

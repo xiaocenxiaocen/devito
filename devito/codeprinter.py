@@ -1,4 +1,5 @@
 from mpmath.libmp import prec_to_dps, to_str
+
 from sympy import Eq
 from sympy.printing.ccode import CCodePrinter
 
@@ -11,8 +12,8 @@ class CodePrinter(CCodePrinter):
     def __init__(self, settings={}):
         CCodePrinter.__init__(self, settings)
         custom_functions = {
-            'INT': 'int',
-            'FLOAT': 'float'
+            'INT': '(int)',
+            'FLOAT': '(float)'
         }
         self.known_functions.update(custom_functions)
 
@@ -86,6 +87,9 @@ class CodePrinter(CCodePrinter):
             rv = '0.' + rv[2:]
 
         return rv + 'F'
+
+    def _print_UnevaluatedExpr(self, expr):
+        return self._print(expr.args[0])
 
 
 def ccode(expr, **settings):
