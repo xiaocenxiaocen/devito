@@ -43,10 +43,10 @@ class demo:
     # Show the shot record at the receivers.
     def plot_record(self, rec):
         limit = 0.05*max(abs(numpy.min(rec)), abs(numpy.max(rec)))
+        print (limit)
+        print (rec.shape)
         l = plt.imshow(rec, vmin=-limit, vmax=limit,
-                cmap=cm.gray,
-                extent=[self.origin[0], self.origin[0]+self.dimensions[0]*self.spacing[0],
-                    self.tn, self.t0])
+                cmap=cm.gray)
         plt.axis('auto')
         plt.xlabel('X position (m)')
         plt.ylabel('Time (ms)')
@@ -55,8 +55,14 @@ class demo:
 
     # Show the RTM image.
     def plot_rtm(self, grad):
-        l = plt.imshow(numpy.diff(numpy.diff(numpy.transpose(grad[40:-40, 40:-40]), 1, 0), 1), 
-                       vmin=-100, vmax=100, aspect=1, cmap=cm.gray)
+        diff = numpy.diff(numpy.diff(numpy.transpose(grad[40:-40, 40:-40]), 1, 0), 1)
+        print ("this was fine")
+        vmin = 0.001*numpy.min(diff)
+        vmax = 0.001*numpy.max(diff)
+        print("vmin", vmin)
+        print("vmax", vmax)
+        l = plt.imshow(diff, 
+                       vmin=vmin, vmax=vmax, aspect=1, cmap=cm.gray)
         plt.show()
 
     def _init_receiver_coords(self, nrec):
@@ -173,9 +179,11 @@ class small_marmousi2D(demo):
         self.model = IGrid(self.origin, self.spacing, vp)
 
         # Smooth true model to create starting model.
-        smooth_vp = ndimage.gaussian_filter(self.model.vp, sigma=(2, 2), order=0)
+        slowness = 1.0/self.model.vp
+        smooth_slowness = ndimage.gaussian_filter(slowness, sigma=(3, 3), order=0)
+        smooth_vp = 1.0/smooth_slowness
 
-        smooth_vp = numpy.max(self.model.vp)/numpy.max(smooth_vp) * smooth_vp
+        # smooth_vp = numpy.max(self.model.vp)/numpy.max(smooth_vp) * smooth_vp
 
         truc = (self.model.vp <= (numpy.min(self.model.vp)+.01))
         smooth_vp[truc] = self.model.vp[truc]
@@ -185,11 +193,14 @@ class small_marmousi2D(demo):
         # Set up receivers
         self.data = IShot()
 
-        f0 = .015
+        f0 = .007
         self.dt = dt = self.model.get_critical_dt()
         t0 = 0.0
-        tn = 1500
-        nt = int(1+(tn-t0)/dt)
+        ly = self.dimensions[1]*self.spacing[1]
+        lx = self.dimensions[0]*self.spacing[0]/2
+        tn = 2*numpy.sqrt(lx*lx+ly*ly)/2.0 # ie the mean time
+        print ("tn is %f"%tn)
+        self.nt = nt = int(1+(tn-t0)/dt)
 
         self.time_series = self._source(numpy.linspace(t0, tn, nt), f0)
 
@@ -214,15 +225,21 @@ class small_marmousi2D(demo):
     def get_initial_model(self):
         return self.model0
 
-    def get_shot(self, i):
-        location = (self.sources[i], self.origin[1] + 2 * self.spacing[1])
-        self.data.set_source(self.time_series, self.dt, location)
+    def get_shot(self, i):    
+        location = numpy.zeros((1, 2))
+        location[0, 0] = self.sources[i]
+        location[0, 1] = self.origin[1] + 2 * self.spacing[1]
 
-        Acoustic = Acoustic_cg(self.model, self.data, t_order=2, s_order=self.spc_order)
-        rec, u, gflopss, oi, timings = Acoustic.Forward(save=False, cse=True)
+        src = IShot()
+        src.set_receiver_pos(location)
+        src.set_shape(self.nt, 1)
+        src.set_traces(self.time_series)
 
-        return self.data, rec
+        Acoustic = Acoustic_cg(self.model, self.data, src, t_order=2, s_order=self.spc_order)
+        rec, u, gflopss, oi, timings = Acoustic.Forward(save=False, dse=True)
 
+        return self.data, rec, src
+    
 
 class small_phantoms2D(demo):
     """
