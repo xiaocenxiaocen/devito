@@ -20,6 +20,7 @@ class IGrid:
                  delta=None, theta=None, phi=None):
         self.vp = vp
         self.rho = rho
+        self.origin = origin
         self.spacing = spacing
         self.dimensions = vp.shape
 
@@ -35,10 +36,8 @@ class IGrid:
         else:
             self.delta = None
 
-        self.phi = phi
         self.theta = theta
-        self.rho = rho
-        self.origin = origin
+        self.phi = phi
 
     def get_shape(self):
         """Tuple of (x, y) or (x, y, z)
