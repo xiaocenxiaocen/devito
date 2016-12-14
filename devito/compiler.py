@@ -77,7 +77,7 @@ class GNUCompiler(Compiler):
         self.ld = 'gcc' if self.version is None else 'gcc-%s' % self.version
         self.cflags = ['-O3', '-g', '-fPIC', '-Wall', '-std=c99']
         self.ldflags = ['-shared']
-
+        print(self.openmp)
         if self.openmp:
             self.ldflags += ['-fopenmp']
         self.pragma_ivdep = [Pragma('GCC ivdep')]
@@ -175,6 +175,8 @@ class CustomCompiler(Compiler):
         self.ld = environ.get('LD', 'gcc')
         self.cflags = environ.get('CFLAGS', '-O3 -g -fPIC -Wall -std=c99').split(' ')
         self.ldflags = environ.get('LDFLAGS', '-shared').split(' ')
+        if self.openmp:
+            self.ldflags = environ.get('LDFLAGS', '-shared -fopenmp').split(' ')
 
         if self.openmp:
             self.ldflags += environ.get('OMP_LDFLAGS', '-fopenmp').split(' ')
