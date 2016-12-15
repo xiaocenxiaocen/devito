@@ -77,7 +77,6 @@ class GNUCompiler(Compiler):
         self.ld = 'gcc' if self.version is None else 'gcc-%s' % self.version
         self.cflags = ['-O3', '-g', '-fPIC', '-Wall', '-std=c99']
         self.ldflags = ['-shared']
-        print(self.openmp)
         if self.openmp:
             self.ldflags += ['-fopenmp']
         self.pragma_ivdep = [Pragma('GCC ivdep')]
