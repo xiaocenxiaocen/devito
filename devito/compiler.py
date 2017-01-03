@@ -1,12 +1,12 @@
 from functools import partial
 from os import environ, getuid, mkdir, path
 from tempfile import gettempdir
+from time import time
 
 import numpy.ctypeslib as npct
 from cgen import Pragma
 from codepy.jit import extension_file_from_string
 from codepy.toolchain import GCCToolchain
-
 from devito.logger import log
 
 __all__ = ['get_tmp_dir', 'get_compiler_from_env',
@@ -77,6 +77,7 @@ class GNUCompiler(Compiler):
         self.ld = 'gcc' if self.version is None else 'gcc-%s' % self.version
         self.cflags = ['-O3', '-g', '-fPIC', '-Wall', '-std=c99']
         self.ldflags = ['-shared']
+
         if self.openmp:
             self.ldflags += ['-fopenmp']
         self.pragma_ivdep = [Pragma('GCC ivdep')]
@@ -174,8 +175,6 @@ class CustomCompiler(Compiler):
         self.ld = environ.get('LD', 'gcc')
         self.cflags = environ.get('CFLAGS', '-O3 -g -fPIC -Wall -std=c99').split(' ')
         self.ldflags = environ.get('LDFLAGS', '-shared').split(' ')
-        if self.openmp:
-            self.ldflags = environ.get('LDFLAGS', '-shared -fopenmp').split(' ')
 
         if self.openmp:
             self.ldflags += environ.get('OMP_LDFLAGS', '-fopenmp').split(' ')
@@ -251,9 +250,11 @@ def jit_compile(ccode, basename, compiler=GNUCompiler):
     elif platform == "win32" or platform == "win64":
         lib_file = "%s.dll" % basename
 
-    log("%s: Compiling %s" % (compiler, src_file))
+    tic = time()
     extension_file_from_string(toolchain=compiler, ext_file=lib_file,
                                source_string=ccode, source_name=src_file)
+    toc = time()
+    log("%s: compiled %s [%.2f s]" % (compiler, src_file, toc - tic))
 
     return lib_file
 
