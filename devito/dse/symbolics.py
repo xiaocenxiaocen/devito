@@ -60,7 +60,7 @@ def rewrite(expr, mode='advanced'):
         except TypeError:
             warning("Arg mode must be a str or tuple (got %s instead)" % type(mode))
             return expr
-    if mode.isdisjoint({'basic', 'factorize', 'approx-trigonometry', 'advanced'}):
+    if mode.isdisjoint({'no-dse', 'basic', 'factorize', 'approx-trigonometry', 'advanced'}):
         warning("Unknown rewrite mode(s) %s" % str(mode))
         return expr
     else:
