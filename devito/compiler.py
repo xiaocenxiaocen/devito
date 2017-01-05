@@ -254,7 +254,7 @@ def jit_compile(ccode, basename, compiler=GNUCompiler):
     extension_file_from_string(toolchain=compiler, ext_file=lib_file,
                                source_string=ccode, source_name=src_file)
     toc = time()
-    log("%s: compiled %s [%.2f s]" % (compiler, src_file, toc - tic))
+    #log("%s: compiled %s [%.2f s]" % (compiler, src_file, toc - tic))
 
     return lib_file
 

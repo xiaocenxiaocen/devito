@@ -82,6 +82,9 @@ class Rewriter(object):
 
     def run(self, mode):
         processed = self.exprs
+ 
+        if mode == 'no-dse':
+            return self._finalize(processed)
 
         if mode.intersection({'basic', 'advanced'}):
             processed = self._cse(processed)
