@@ -17,6 +17,6 @@ setup(name='devito',
       author="Imperial College London",
       author_email='opesci@imperial.ac.uk',
       license='MIT',
-      packages=['devito'],
+      packages=['devito', 'devito.dse'],
       install_requires=['numpy', 'sympy', 'mpmath', 'cgen', 'codepy'],
       test_requires=['pytest', 'flake8', 'isort'])
