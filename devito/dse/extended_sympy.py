@@ -3,7 +3,7 @@ Extended SymPy hierarchy.
 """
 
 import sympy
-from sympy import Expr
+from sympy import Expr, Float
 from sympy.core.basic import _aresame
 from sympy.functions.elementary.trigonometric import TrigonometricFunction
 
@@ -39,6 +39,28 @@ class Add(sympy.Add, UnevaluatedExpr):
     pass
 
 
+class taylor_sin(TrigonometricFunction):
+
+    """
+    Approximation of the sine function using a Taylor polynomial.
+    """
+
+    @classmethod
+    def eval(cls, arg):
+        return eval_taylor_sin(arg)
+
+
+class taylor_cos(TrigonometricFunction):
+
+    """
+    Approximation of the cosine function using a Taylor polynomial.
+    """
+
+    @classmethod
+    def eval(cls, arg):
+        return 1.0 if arg == 0.0 else eval_taylor_cos(arg + 1.5708)
+
+
 class bhaskara_sin(TrigonometricFunction):
 
     """
@@ -47,7 +69,7 @@ class bhaskara_sin(TrigonometricFunction):
 
     @classmethod
     def eval(cls, arg):
-        return 0.0 if arg == 0.0 else eval_bhaskara_sin(arg)
+        return eval_bhaskara_sin(arg)
 
 
 class bhaskara_cos(TrigonometricFunction):
@@ -63,5 +85,29 @@ class bhaskara_cos(TrigonometricFunction):
 
 # Utils
 
-def eval_bhaskara_sin(angle):
-    return 16.0*angle*(3.1416-abs(angle))/(49.3483-4.0*abs(angle)*(3.1416-abs(angle)))
+def eval_bhaskara_sin(expr):
+    return 16.0*expr*(3.1416-abs(expr))/(49.3483-4.0*abs(expr)*(3.1416-abs(expr)))
+
+
+def eval_taylor_sin(expr):
+    v = expr + Mul(-1/6.0,
+                   Mul(expr, expr, expr, evaluate=False),
+                   1.0 + Mul(Mul(expr, expr, evaluate=False), -0.05, evaluate=False),
+                   evaluate=False)
+    try:
+        Float(expr)
+        return v.doit()
+    except (TypeError, ValueError):
+        return v
+
+
+def eval_taylor_cos(expr):
+    v = 1.0 + Mul(-0.5,
+                  Mul(expr, expr, evaluate=False),
+                  1.0 + Mul(expr, expr, -1/12.0, evaluate=False),
+                  evaluate=False)
+    try:
+        Float(expr)
+        return v.doit()
+    except (TypeError, ValueError):
+        return v
