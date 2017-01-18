@@ -16,8 +16,8 @@ def smooth10(vel, shape):
     return out
 
 order = [2, 4, 6, 8]
-size = 800
-scale = [2, 4, 8]
+size = 1600
+scale = [16, 32, 64]
 grid = 1
 
 
@@ -75,9 +75,10 @@ time = np.zeros((3, 4))
 for i in range(0, len(scale)):
     for j in range(0, len(order)):
         # Define geometry
-        dimensions = tuple([size / scale[i]] * 2)
+        scalei = scale[i] / (2**(len(order) - j  - 1))
+        dimensions = tuple([size / scalei] * 2)
         origin = tuple([0.0] * len(dimensions))
-        spacing = tuple([grid * scale[i]] * len(dimensions))
+        spacing = tuple([grid * scalei] * len(dimensions))
 
         vp = 1.5 * np.ones(dimensions)
 
@@ -117,7 +118,7 @@ for i in range(0, len(scale)):
 
         Wave = Acoustic_cg(model, data, src, t_order=2, s_order=order[j], nbpml=40)
         rec, u, gflopss, oi, timings = Wave.Forward()
-        error[i, j] = np.linalg.norm(u.data[final, 40:-40, 40:-40].reshape(-1) - u0.data[final0, 40:-40:scale[i], 40:-40:scale[i]].reshape(-1))
+        error[i, j] = np.linalg.norm(u.data[final, 40:-40, 40:-40].reshape(-1) - u0.data[final0, 40:-40:scalei, 40:-40:scalei].reshape(-1))
         time[i, j] = sum(timings.values())
 
 
@@ -125,4 +126,5 @@ print(error)
 print(time)
 fig2 = plt.figure()
 plt.loglog(error[:, 0], time[:, 0], error[:, 1], time[:, 1], error[:, 2], time[:, 2], error[:, 3], time[:, 3])
+plt.legend(['2nd order', '4th order', '6th order', '8th order'], loc='upper right')
 plt.show()
