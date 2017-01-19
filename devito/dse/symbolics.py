@@ -398,7 +398,7 @@ class Rewriter(object):
             except ZeroDivisionError:
                 summary = ""
             elapsed = sum(self.timings.values())
-            dse("Rewriter:%s [%.2f s]" % (summary, elapsed))
+            #dse("Rewriter:%s [%.2f s]" % (summary, elapsed))
 
 
 def collect_nested(expr):
