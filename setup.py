@@ -4,7 +4,7 @@ except ImportError:
     from distutils.core import setup
 
 setup(name='devito',
-      version='2.0.1',
+      version='2.0.2',
       description="Finite Difference DSL for symbolic computation.",
       long_descritpion="""Devito is a new tool for performing
       optimised Finite Difference (FD) computation from high-level
