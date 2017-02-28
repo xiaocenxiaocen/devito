@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 from functools import reduce
+import numpy as np
 from operator import mul
 
 from sympy import finite_diff_weights, symbols
@@ -49,6 +50,85 @@ right = Side(1)
 centered = Side(0)
 
 
+def optimal_coeff_2nd_derivative(order):
+    M = order/2
+    # fd stencil from -M * dx to M * dx
+    # Grid
+    kNyquist = np.pi
+    maxRelK = 1
+
+    nKOpt = 100
+    kAxisOpt = -maxRelK * kNyquist + 2 * maxRelK * kNyquist * np.arange(0, nKOpt) / (nKOpt - 1)
+    bTrue = - kAxisOpt**2
+    weight = abs(1. / bTrue)
+
+    matBOpt = np.zeros((nKOpt, 2 * M + 1), dtype=np.complex)
+    for j in range(-M, M+1):
+        for l in range(0, nKOpt):
+            matBOpt[l, j + M] = np.exp(1j * j * kAxisOpt[l])
+
+    matBOpt = np.diag(weight).dot(matBOpt)
+    # Stencil coefficients
+    b = np.linalg.lstsq(matBOpt, (weight * bTrue))[0]
+
+    return [i.real for i in b]
+
+
+def optimal_coeff_1st_derivative_centered(order):
+    M = order/2
+    # fd stencil from -M * dx to M * dx
+    # Grid
+    kNyquist = np.pi
+    maxRelK = 1
+
+    nKOpt = 100
+    kAxisOpt = -maxRelK * kNyquist + 2 * maxRelK * kNyquist * np.arange(0, nKOpt) / (nKOpt - 1)
+    bTrue = 1j*kAxisOpt
+    weight = abs(1. / bTrue)
+
+    matBOpt = np.zeros((nKOpt, 2 * M + 1), dtype=np.complex)
+    for j in range(-M, M+1):
+        for l in range(0, nKOpt):
+            matBOpt[l, j + M] = np.exp(1j * j * kAxisOpt[l])
+
+    matBOpt = np.diag(weight).dot(matBOpt)
+    # Stencil coefficients
+    b = np.linalg.lstsq(matBOpt, (weight * bTrue))[0]
+
+    return [i.real for i in b]
+
+
+def optimal_coeff_1st_derivative_uncentered(order, side):
+    if side == right:
+        ind = range(-int(order / 2) + 1 - (order % 2),
+                    int((order + 1) / 2) + 2 - (order % 2))
+    elif side == left:
+        ind = range(-int(order / 2) + 1 - (order % 2),
+                    int((order + 1) / 2) + 2 - (order % 2))
+    else:
+        raise ValueError
+    # fd stencil from -M * dx to M * dx
+    # Grid
+    kNyquist = np.pi
+    maxRelK = 1
+
+    nKOpt = 100
+    kAxisOpt = -maxRelK * kNyquist + 2 * maxRelK * kNyquist * np.arange(0, nKOpt) / (nKOpt - 1)
+    bTrue = 1j*kAxisOpt
+    weight = abs(1. / bTrue)
+
+    matBOpt = np.zeros((nKOpt, ind.len()), dtype=np.complex)
+    for j in ind:
+        for l in range(0, nKOpt):
+            matBOpt[l, j + min(ind)] = np.exp(1j * j * kAxisOpt[l])
+
+    matBOpt = np.diag(weight).dot(matBOpt)
+    # Stencil coefficients
+    b = np.linalg.lstsq(matBOpt, (weight * bTrue))[0]
+
+    return [i.real for i in b]
+
+
 def second_derivative(*args, **kwargs):
     """Derives second derivative for a product of given functions.
 
@@ -71,7 +151,8 @@ def second_derivative(*args, **kwargs):
 
     assert(order in fd_coefficients)
 
-    coeffs = fd_coefficients[order]
+    coeffs = optimal_coeff_2nd_derivative(order)
+    # fd_coefficients[order]
     deriv = coeffs[0] * reduce(mul, args, 1)
 
     for i in range(1, int(order / 2) + 1):

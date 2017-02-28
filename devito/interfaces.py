@@ -313,26 +313,29 @@ class DenseData(TensorData):
     @property
     def dx2(self):
         """Symbol for the second derivative wrt the x dimension"""
-        width_h = int(self.space_order/2)
-        indx = [(x + i * h) for i in range(-width_h, width_h + 1)]
-
-        return as_finite_diff(self.diff(x, x), indx)
+        return second_derivative(self, order=self.space_order, dim=x)
+        # width_h = int(self.space_order/2)
+        # indx = [(x + i * h) for i in range(-width_h, width_h + 1)]
+        #
+        # return as_finite_diff(self.diff(x, x), indx)
 
     @property
     def dy2(self):
         """Symbol for the second derivative wrt the y dimension"""
-        width_h = int(self.space_order/2)
-        indy = [(y + i * h) for i in range(-width_h, width_h + 1)]
-
-        return as_finite_diff(self.diff(y, y), indy)
+        return second_derivative(self, order=self.space_order, dim=y)
+        # width_h = int(self.space_order/2)
+        # indy = [(y + i * h) for i in range(-width_h, width_h + 1)]
+        #
+        # return as_finite_diff(self.diff(y, y), indy)
 
     @property
     def dz2(self):
         """Symbol for the second derivative wrt the z dimension"""
-        width_h = int(self.space_order/2)
-        indz = [(z + i * h) for i in range(-width_h, width_h + 1)]
-
-        return as_finite_diff(self.diff(z, z), indz)
+        return second_derivative(self, order=self.space_order, dim=z)
+        # width_h = int(self.space_order/2)
+        # indz = [(z + i * h) for i in range(-width_h, width_h + 1)]
+        #
+        # return as_finite_diff(self.diff(z, z), indz)
 
     @property
     def dx2y2(self):
