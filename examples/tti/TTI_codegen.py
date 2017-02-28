@@ -31,8 +31,10 @@ class TTI_cg:
             dampcoeff = 1.5 * np.log(1.0 / 0.001) / (40 * h)
             num_dim = len(damp.shape)
             for i in range(nbp):
-                pos = np.abs((nbp-i+1)/float(nbp))
-                val = dampcoeff * (pos - np.sin(2*np.pi*pos)/(2*np.pi))
+                # pos = np.abs((nbp-i+1)/float(nbp))
+                # val = dampcoeff * (pos - np.sin(2*np.pi*pos)/(2*np.pi))
+                pos = abs((40 - i + 1))
+                val = 1 - np.exp(-(0.004 * pos) ** 2)
                 if num_dim == 2:
                     damp[i, :] += val
                     damp[-(i + 1), :] += val

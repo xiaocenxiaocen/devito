@@ -74,58 +74,36 @@ def optimal_coeff_2nd_derivative(order):
     return [i.real for i in b]
 
 
-def optimal_coeff_1st_derivative_centered(order):
-    M = order/2
-    # fd stencil from -M * dx to M * dx
-    # Grid
-    kNyquist = np.pi
-    maxRelK = 1
-
-    nKOpt = 100
-    kAxisOpt = -maxRelK * kNyquist + 2 * maxRelK * kNyquist * np.arange(0, nKOpt) / (nKOpt - 1)
-    bTrue = 1j*kAxisOpt
-    weight = abs(1. / bTrue)
-
-    matBOpt = np.zeros((nKOpt, 2 * M + 1), dtype=np.complex)
-    for j in range(-M, M+1):
-        for l in range(0, nKOpt):
-            matBOpt[l, j + M] = np.exp(1j * j * kAxisOpt[l])
-
-    matBOpt = np.diag(weight).dot(matBOpt)
-    # Stencil coefficients
-    b = np.linalg.lstsq(matBOpt, (weight * bTrue))[0]
-
-    return [i.real for i in b]
-
-
-def optimal_coeff_1st_derivative_uncentered(order, side):
+def optimal_coeff_1st_derivative(order, side):
     if side == right:
         ind = range(-int(order / 2) + 1 - (order % 2),
                     int((order + 1) / 2) + 2 - (order % 2))
     elif side == left:
-        ind = range(-int(order / 2) + 1 - (order % 2),
-                    int((order + 1) / 2) + 2 - (order % 2))
+        ind = range(-(int((order + 1) / 2) + 2 - (order % 2))+1,
+                    -(-int(order / 2) + 1 - (order % 2))+1)
     else:
-        raise ValueError
+        ind = range(-int(order / 2), int((order + 1) / 2) + 1)
+
     # fd stencil from -M * dx to M * dx
     # Grid
     kNyquist = np.pi
-    maxRelK = 1
+    maxRelK = .99
 
     nKOpt = 100
     kAxisOpt = -maxRelK * kNyquist + 2 * maxRelK * kNyquist * np.arange(0, nKOpt) / (nKOpt - 1)
     bTrue = 1j*kAxisOpt
-    weight = abs(1. / bTrue)
+    weight = np.exp(-abs(bTrue)**1.5)
 
-    matBOpt = np.zeros((nKOpt, ind.len()), dtype=np.complex)
+    matBOpt = np.zeros((nKOpt, len(ind)), dtype=np.complex)
     for j in ind:
         for l in range(0, nKOpt):
-            matBOpt[l, j + min(ind)] = np.exp(1j * j * kAxisOpt[l])
+            matBOpt[l, j - min(ind)] = np.exp(1j * j * kAxisOpt[l])
 
     matBOpt = np.diag(weight).dot(matBOpt)
     # Stencil coefficients
     b = np.linalg.lstsq(matBOpt, (weight * bTrue))[0]
-
+    if side == left:
+        b = b[::-1]
     return [i.real for i in b]
 
 
@@ -254,11 +232,12 @@ def first_derivative(*args, **kwargs):
                                                int((order + 1) / 2) + 1)]
         sign = 1
     # Finite difference weights from Taylor approximation with this positions
-    c = finite_diff_weights(1, ind, dim)
-    c = c[-1][-1]
-
+    c1 = finite_diff_weights(1, ind, dim)
+    c1 = c1[-1][-1]
+    # c = optimal_coeff_1st_derivative(order, side)
+    # print(side, c, ind)
     # Diagonal elements
     for i in range(0, len(ind)):
             var = [a.subs({dim: ind[i]}) for a in args]
-            deriv += c[i] * reduce(mul, var, 1)
+            deriv += c1[i] * reduce(mul, var, 1)
     return sign*deriv
