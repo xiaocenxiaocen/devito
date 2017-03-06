@@ -1,9 +1,9 @@
-
-from containers import IShot, IGrid
 import numpy as np
+
 import matplotlib.pyplot as plt
-from acoustic.Acoustic_codegen import Acoustic_cg
-from scipy import interpolate
+from matplotlib import cm
+from examples.acoustic.Acoustic_codegen import Acoustic_cg
+from examples.containers import IGrid, IShot
 
 
 # Velocity models
@@ -17,7 +17,7 @@ def smooth10(vel, shape):
 
 order = [2, 4, 6, 8]
 size = 1600
-scale = [16, 32, 64]
+scale = [2, 4, 8, 16, 32, 64, 128]
 grid = 1
 
 
@@ -42,20 +42,20 @@ model = IGrid(origin, spacing, vp)
 # Define seismic data.
 data = IShot()
 src = IShot()
-f0 = .010
+f0 = .020
 dt0 = model.get_critical_dt()
 t0 = 0.0
-tn = 300.0
+tn = 400.0
 nt = int(1+(tn-t0)/dt0)
-final0 = nt % 3
+final0 = (nt + 2) % 3
 # Source geometry
 time_series = np.zeros((nt, 1))
 
 time_series[:, 0] = source(np.linspace(t0, tn, nt), f0)
 
 location = np.zeros((1, 2))
-location[0, 0] = 400
-location[0, 1] = 400
+location[0, 0] = 800
+location[0, 1] = 800
 
 src.set_receiver_pos(location)
 src.set_shape(nt, 1)
@@ -63,23 +63,22 @@ src.set_traces(time_series)
 # src.set_time_axis(dt, tn)
 # Receiver geometry
 receiver_coords = np.zeros((201, 2))
-receiver_coords[:, 0] = np.linspace(0, 800, num=201)
+receiver_coords[:, 0] = np.linspace(0, 1600, num=201)
 receiver_coords[:, 1] = 200
 data.set_receiver_pos(receiver_coords)
 data.set_shape(nt, 201)
 
-Wave = Acoustic_cg(model, data, src, t_order=2, s_order=12, nbpml=40)
+Wave = Acoustic_cg(model, data, src, t_order=2, s_order=36, nbpml=10)
 rec0, u0, gflopss, oi, timings = Wave.Forward()
 error = np.zeros((3, 4))
 time = np.zeros((3, 4))
-for i in range(0, len(scale)):
+for i in range(0, 3):
     for j in range(0, len(order)):
         # Define geometry
-        scalei = scale[i] / (2**(len(order) - j  - 1))
+        scalei = scale[i + int(j/2)] # / (2**(len(order) - j - 1))
         dimensions = tuple([size / scalei] * 2)
         origin = tuple([0.0] * len(dimensions))
         spacing = tuple([grid * scalei] * len(dimensions))
-
         vp = 1.5 * np.ones(dimensions)
 
         model = IGrid(origin, spacing, vp)
@@ -90,20 +89,20 @@ for i in range(0, len(scale)):
         # Define seismic data.
         data = IShot()
         src = IShot()
-        f0 = .010
+        f0 = .020
         dt = model.get_critical_dt()
         t0 = 0.0
-        tn = 300.0
+        tn = 400.0
         nt = int(1 + (tn - t0) / dt)
-        final = nt % 3
+        final = (nt + 2) % 3
         # Source geometry
         time_series = np.zeros((nt, 1))
 
         time_series[:, 0] = source(np.linspace(t0, tn, nt), f0)
 
         location = np.zeros((1, 2))
-        location[0, 0] = 400
-        location[0, 1] = 400
+        location[0, 0] = 800
+        location[0, 1] = 800
 
         src.set_receiver_pos(location)
         src.set_shape(nt, 1)
@@ -111,15 +110,20 @@ for i in range(0, len(scale)):
         # src.set_time_axis(dt, tn)
         # Receiver geometry
         receiver_coords = np.zeros((201, 2))
-        receiver_coords[:, 0] = np.linspace(0, 800, num=201)
+        receiver_coords[:, 0] = np.linspace(0, 1600, num=201)
         receiver_coords[:, 1] = 200
         data.set_receiver_pos(receiver_coords)
         data.set_shape(nt, 201)
 
-        Wave = Acoustic_cg(model, data, src, t_order=2, s_order=order[j], nbpml=40)
+        Wave = Acoustic_cg(model, data, src, t_order=2, s_order=order[j], nbpml=10)
         rec, u, gflopss, oi, timings = Wave.Forward()
-        error[i, j] = np.linalg.norm(u.data[final, 40:-40, 40:-40].reshape(-1) - u0.data[final0, 40:-40:scalei, 40:-40:scalei].reshape(-1))
+        error[i, j] = np.linalg.norm(u.data[final, 10:-10, 10:-10].reshape(-1)/np.linalg.norm(u.data[final, 10:-10, 10:-10].reshape(-1)) - u0.data[final0, 10:-10:scalei, 10:-10:scalei].reshape(-1)/np.linalg.norm(u0.data[final0, 10:-10:scalei, 10:-10:scalei].reshape(-1)))
         time[i, j] = sum(timings.values())
+        # fig2 = plt.figure()
+        # l = plt.imshow(np.transpose(u.data[final, 10:-10, 10:-10]/np.linalg.norm(u.data[final, 10:-10, 10:-10].reshape(-1))), vmin=-.1, vmax=.1, cmap=cm.gray, aspect=1)
+        # fig2 = plt.figure()
+        # l = plt.imshow(np.transpose(u0.data[final0, 10:-10:scalei, 10:-10:scalei]/np.linalg.norm(u0.data[final0, 10:-10:scalei, 10:-10:scalei].reshape(-1))), vmin=-.1, vmax=.1, cmap=cm.gray, aspect=1)
+        # plt.show()
 
 
 print(error)
