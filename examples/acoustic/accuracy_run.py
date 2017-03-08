@@ -42,7 +42,7 @@ model = IGrid(origin, spacing, vp)
 # Define seismic data.
 data = IShot()
 src = IShot()
-f0 = .020
+f0 = .015
 dt0 = model.get_critical_dt()
 t0 = 0.0
 tn = 400.0
@@ -68,7 +68,7 @@ receiver_coords[:, 1] = 200
 data.set_receiver_pos(receiver_coords)
 data.set_shape(nt, 201)
 
-Wave = Acoustic_cg(model, data, src, t_order=2, s_order=36, nbpml=10)
+Wave = Acoustic_cg(model, data, src, t_order=2, s_order=40, nbpml=40)
 rec0, u0, gflopss, oi, timings = Wave.Forward()
 error = np.zeros((3, 4))
 time = np.zeros((3, 4))
@@ -89,7 +89,7 @@ for i in range(0, 3):
         # Define seismic data.
         data = IShot()
         src = IShot()
-        f0 = .020
+        f0 = .015
         dt = model.get_critical_dt()
         t0 = 0.0
         tn = 400.0
@@ -115,14 +115,14 @@ for i in range(0, 3):
         data.set_receiver_pos(receiver_coords)
         data.set_shape(nt, 201)
 
-        Wave = Acoustic_cg(model, data, src, t_order=2, s_order=order[j], nbpml=10)
+        Wave = Acoustic_cg(model, data, src, t_order=2, s_order=order[j], nbpml=40)
         rec, u, gflopss, oi, timings = Wave.Forward()
-        error[i, j] = np.linalg.norm(u.data[final, 10:-10, 10:-10].reshape(-1)/np.linalg.norm(u.data[final, 10:-10, 10:-10].reshape(-1)) - u0.data[final0, 10:-10:scalei, 10:-10:scalei].reshape(-1)/np.linalg.norm(u0.data[final0, 10:-10:scalei, 10:-10:scalei].reshape(-1)))
+        error[i, j] = np.linalg.norm(u.data[final, 40:-40, 40:-40].reshape(-1)/np.linalg.norm(u.data[final, 40:-40, 40:-40].reshape(-1)) - u0.data[final0, 40:-40:scalei, 40:-40:scalei].reshape(-1)/np.linalg.norm(u0.data[final0, 40:-40:scalei, 40:-40:scalei].reshape(-1)))
         time[i, j] = sum(timings.values())
         # fig2 = plt.figure()
-        # l = plt.imshow(np.transpose(u.data[final, 10:-10, 10:-10]/np.linalg.norm(u.data[final, 10:-10, 10:-10].reshape(-1))), vmin=-.1, vmax=.1, cmap=cm.gray, aspect=1)
+        # l = plt.imshow(np.transpose(u.data[final, 40:-40, 40:-40]/np.linalg.norm(u.data[final, 40:-40, 40:-40].reshape(-1))), vmin=-.1, vmax=.1, cmap=cm.gray, aspect=1)
         # fig2 = plt.figure()
-        # l = plt.imshow(np.transpose(u0.data[final0, 10:-10:scalei, 10:-10:scalei]/np.linalg.norm(u0.data[final0, 10:-10:scalei, 10:-10:scalei].reshape(-1))), vmin=-.1, vmax=.1, cmap=cm.gray, aspect=1)
+        # l = plt.imshow(np.transpose(u0.data[final0, 40:-40:scalei, 40:-40:scalei]/np.linalg.norm(u0.data[final0, 40:-40:scalei, 40:-40:scalei].reshape(-1))), vmin=-.1, vmax=.1, cmap=cm.gray, aspect=1)
         # plt.show()
 
 
