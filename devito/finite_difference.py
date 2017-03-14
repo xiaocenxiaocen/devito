@@ -10,23 +10,6 @@ from devito.dimension import x, y
 __all__ = ['first_derivative', 'second_derivative', 'cross_derivative',
            'left', 'right', 'centered']
 
-
-# Explicitly derived Finite Difference coefficients for
-# symmetric derivative stencils.
-fd_coefficients = {
-    16: [-3.054844, 1.777778, -0.311111, 0.075421, -0.017677, 0.003481, -0.000518,
-         0.000051, -0.000002],
-    14: [-3.023594, 1.750000, -0.291667, 0.064815, -0.013258, 0.002121, -0.000227,
-         0.000012],
-    12: [-2.982778, 1.714286, -0.267857, 0.052910, -0.008929, 0.001039, -0.000060],
-    10: [-2.927222, 1.666667, -0.238095, 0.039683, -0.004960, 0.000317],
-    8: [-2.847222, 1.600000, -0.200000, 0.025397, -0.001786],
-    6: [-2.722222, 1.500000, -0.150000, 0.01111],
-    4: [-2.500000, 1.333333, -0.08333],
-    2: [-2., 1.],
-}
-
-
 # Default spacing symbol
 h = symbols('h')
 
@@ -69,17 +52,19 @@ def second_derivative(*args, **kwargs):
     dim = kwargs.get('dim', x)
     diff = kwargs.get('diff', h)
 
-    assert(order in fd_coefficients)
+    # assert(order in fd_coefficients)
 
-    coeffs = fd_coefficients[order]
-    deriv = coeffs[0] * reduce(mul, args, 1)
+    ind = [(dim + i * diff) for i in range(-int(order / 2),
+                                           int((order + 1) / 2) + 1)]
+    c = finite_diff_weights(2, ind, dim)
+    coeffs = c[-1][-1]
 
-    for i in range(1, int(order / 2) + 1):
-        aux1 = [a.subs(dim, dim + i * diff) for a in args]
-        aux2 = [a.subs(dim, dim - i * diff) for a in args]
-        deriv += coeffs[i] * (reduce(mul, aux1, 1) + reduce(mul, aux2, 1))
+    deriv = 0
+    for i in range(0, len(ind)):
+        var = [a.subs({dim: ind[i]}) for a in args]
+        deriv += coeffs[i] * reduce(mul, var, 1)
 
-    return (1 / diff**2) * deriv
+    return deriv
 
 
 def cross_derivative(*args, **kwargs):
