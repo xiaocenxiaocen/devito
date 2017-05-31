@@ -10,7 +10,7 @@ import psutil
 
 import cgen as c
 
-from devito.dimension import Dimension
+from devito.dimension import BlockDimension
 from devito.dle import (compose_nodes, copy_arrays, filter_iterations,
                         retrieve_iteration_tree)
 from devito.dle.backends import (BasicRewriter, BlockingArg, dle_pass, omplang,
@@ -144,7 +144,7 @@ class DevitoRewriter(BasicRewriter):
                 blocked_iterations = []
                 for i in iterations:
                     # Build Iteration over blocks
-                    dim = blocked.setdefault(i, Dimension("%s_block" % i.dim.name))
+                    dim = blocked.setdefault(i, BlockDimension("%s_block" % i.dim.name))
                     block_size = dim.symbolic_size
                     iter_size = i.dim.size or i.dim.symbolic_size
                     start = i.limits[0] - i.offsets[0]

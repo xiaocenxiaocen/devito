@@ -140,14 +140,20 @@ class OperatorBasic(Function):
 
         # Initialise argument map and a map of dimension names to values
         arguments = OrderedDict([(arg.name, arg) for arg in self.parameters])
-        dim_sizes = dict([(arg.name, arg.size) for arg in self.parameters
-                          if isinstance(arg, Dimension)])
-
+        
+        dim_limits = {}
+        for arg in self.parameters:
+            if isinstance(arg, Dimension):
+                if arg.size is not None:
+                    dim_limits[arg.name] = (0, arg.size)
+                else:
+                    dim_limits[arg.name] = None
+    
         o_vals = {}
         for name, arg in kwargs.items():
             # Override explicitly provided dim sizes from **kwargs
-            if name in dim_sizes:
-                dim_sizes[name] = arg
+            if name in dim_limits and arg is not None:
+                dim_limits[name] = arg if isinstance(arg, tuple) else (0, arg)
 
             # Override explicitly provided SymbolicData
             if name in arguments and isinstance(arguments[name], SymbolicData):
@@ -186,13 +192,14 @@ class OperatorBasic(Function):
                     else:
                         continue
 
-                if dim_sizes[dim.name] is None:
+                if dim_limits[dim.name] is None:
                     # We haven't determined the size of this dimension yet,
                     # try to infer it from the data shape.
-                    dim_sizes[dim.name] = shape[i]
+                    dim_limits[dim.name] = (0, shape[i])
                 else:
                     # We know the dimension size, check if data shape agrees
-                    if not dim_sizes[dim.name] <= shape[i]:
+                    if not (dim_limits[dim.name][0] <= shape[i]
+                            and dim_limits[dim.name][1] <= shape[i]):
                         error('Size of dimension %s was determined to be %d, '
                               'but data for symbol %s has shape %d.'
                               % (dim.name, dim_sizes[dim.name], fname, shape[i]))
@@ -203,35 +210,40 @@ class OperatorBasic(Function):
         d_args = [d for d in arguments.values() if isinstance(d, Dimension)]
         for d in d_args:
             if d.is_Buffered:
-                if dim_sizes[d.parent.name] is None:
-                    dim_sizes[d.parent.name] = dim_sizes[d.name]
-                if dim_sizes[d.name] is None:
-                    dim_sizes[d.name] = dim_sizes[d.parent.name]
-
+                if dim_limits[d.parent.name] is None:
+                    dim_limits[d.parent.name] = dim_limits[d.name]
+                if dim_limits[d.name] is None:
+                    dim_limits[d.name] = dim_limits[d.parent.name]
+        print(arguments)
         # Add user-provided block sizes, if any
         dle_arguments = OrderedDict()
         for i in self._dle_state.arguments:
-            dim_size = dim_sizes.get(i.original_dim.name, i.original_dim.size)
-            if dim_size is None:
+            dim_limit = dim_limits.get(i.original_dim.name, (0, i.original_dim.size))
+            if dim_limit is None:
                 error('Unable to derive size of dimension %s from defaults. '
                       'Please provide an explicit value.' % i.original_dim.name)
                 raise InvalidArgument('Unknown dimension size')
             if i.value:
                 try:
-                    dle_arguments[i.argument.name] = i.value(dim_size)
+                    dle_arguments[i.argument.name] = i.value(dim_limit)
                 except TypeError:
                     dle_arguments[i.argument.name] = i.value
                     # User-provided block size available, do not autotune
                     maybe_autotune = False
             else:
-                dle_arguments[i.argument.name] = dim_size
-        dim_sizes.update(dle_arguments)
-
+                dle_arguments[i.argument.name] = dim_limit
+        dim_limits.update(dle_arguments)
+        #print(arguments)
         # Insert loop size arguments from dimension values
-        d_args = [d for d in arguments.values() if isinstance(d, Dimension)]
+        d_args = [d for d in arguments.values() if isinstance(d, Dimension) and
+                  not d.is_Block]
         for d in d_args:
-            arguments[d.name] = dim_sizes[d.name]
-
+            del arguments[d.name]
+            arguments[d.name + "_s"], arguments[d.name + "_e"] = dim_limits[d.name]
+        b_args = [d for d in arguments.values() if isinstance(d, Dimension) and
+                  d.is_Block]
+        for d in b_args:
+            arguments[d.name] = dim_limits[d.name]
         # Might have been asked to auto-tune the block size
         if maybe_autotune:
             arguments = self._autotune(arguments)
@@ -243,7 +255,7 @@ class OperatorBasic(Function):
         for name, arg in arguments.items():
             if isinstance(arg, SymbolicData) or isinstance(arg, Dimension):
                 raise ValueError('Runtime argument %s not defined' % arg)
-        return arguments, dim_sizes
+        return arguments, dim_limits
 
     @property
     def ccode(self):

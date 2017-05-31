@@ -10,6 +10,7 @@ class Dimension(Symbol):
 
     is_Buffered = False
     is_Lowered = False
+    is_Block = False
 
     """Index object that represents a problem dimension and thus
     defines a potential iteration space.
@@ -106,6 +107,11 @@ class LoweredDimension(Dimension):
     @property
     def reverse(self):
         return self.buffered.reverse
+
+
+class BlockDimension(Dimension):
+
+    is_Block = True
 
 
 # Default dimensions for time
