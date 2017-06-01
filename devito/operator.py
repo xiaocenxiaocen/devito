@@ -105,9 +105,9 @@ class OperatorBasic(Function):
         parameters = FindSymbols('kernel-data').visit(nodes)
         dimensions = FindSymbols('dimensions').visit(nodes)
         dimensions += [d.parent for d in dimensions if d.is_Buffered]
-        parameters += filter_ordered([d for d in dimensions if d.size is None],
+        parameters += filter_ordered([d for d in dimensions if d.end is None],
                                      key=operator.attrgetter('name'))
-
+        print(parameters)
         # Resolve and substitute dimensions for loop index variables
         subs = {}
         nodes = ResolveIterationVariable().visit(nodes, subs=subs)
@@ -134,7 +134,7 @@ class OperatorBasic(Function):
         """
         if len(args) == 0:
             args = self.parameters
-
+        print(self)
         # Will perform auto-tuning if the user requested it and loop blocking was used
         maybe_autotune = kwargs.get('autotune', False)
 
@@ -218,6 +218,8 @@ class OperatorBasic(Function):
         # Add user-provided block sizes, if any
         dle_arguments = OrderedDict()
         for i in self._dle_state.arguments:
+            print(i)
+            print(type(i))
             dim_limit = dim_limits.get(i.original_dim.name, (0, i.original_dim.size))
             if dim_limit is None:
                 error('Unable to derive size of dimension %s from defaults. '
@@ -366,7 +368,8 @@ class OperatorBasic(Function):
                 needed = entries[index:]
 
                 # Build and insert the required Iterations
-                iters = [Iteration([], j.dim, j.dim.size, offsets=j.ofs) for j in needed]
+                iters = [Iteration([], j.dim, (j.dim.start, j.dim.end, 1),
+                                       offsets=j.ofs) for j in needed]
                 body, tree = compose_nodes(iters + [expressions], retrieve=True)
                 scheduling = OrderedDict(zip(needed, tree))
                 if root is None:

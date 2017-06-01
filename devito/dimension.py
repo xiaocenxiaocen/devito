@@ -23,27 +23,48 @@ class Dimension(Symbol):
 
     def __new__(cls, name, **kwargs):
         newobj = Symbol.__new__(cls, name)
-        newobj.size = kwargs.get('size', None)
-        newobj.reverse = kwargs.get('reverse', False)
+        newobj.start = kwargs.get('start', None)
+        newobj.end = kwargs.get('end', None)
         return newobj
 
     def __str__(self):
         return self.name
 
     @property
-    def symbolic_size(self):
-        """The symbolic size of this dimension."""
-        return Symbol(self.ccode)
+    def symbolic_start(self):
+        """The symbolic start of this dimension."""
+        return Symbol(self.ccode_s)
 
     @property
-    def ccode(self):
+    def symbolic_end(self):
+        """The symbolic end of this dimension. """
+        return Symbol(self.ccode_e)
+
+    @property
+    def ccode_s(self):
         """C-level variable name of this dimension"""
-        return "%s_size" % self.name if self.size is None else "%d" % self.size
+        if self.end is None:
+           return "%s_s" % self.name
+        else:
+           if self.start is None:
+              return "0"
+           else:
+              return "%d" % self.start
 
     @property
-    def decl(self):
+    def ccode_e(self):
+        """C-level variable name of this dimension"""
+        return "%s_e" % self.name if self.end is None else "%d" % self.end
+
+    @property
+    def decl_s(self):
         """Variable declaration for C-level kernel headers"""
-        return cgen.Value("const int", self.ccode)
+        return cgen.Value("const int", self.ccode_s)
+
+    @property
+    def decl_e(self):
+        """Variable declaration for C-level kernel headers"""
+        return cgen.Value("const int", self.ccode_e)
 
     @property
     def dtype(self):

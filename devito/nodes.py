@@ -289,7 +289,9 @@ class Iteration(Node):
             # FIXME: Add dimension size as variable bound.
             # Needs further generalisation to support loop blocking.
             dim = self.dim.parent if self.dim.is_Buffered else self.dim
-            self.limits[1] = dim.size or dim.symbolic_size
+            self.limits[1] = dim.end or dim.symbolic_end
+            self.limits[0] = dim.start or dim.symbolic_start
+            
 
         # Record offsets to later adjust loop limits accordingly
         self.offsets = [0, 0]

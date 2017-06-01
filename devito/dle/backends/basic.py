@@ -80,13 +80,16 @@ class BasicRewriter(AbstractRewriter):
                     seen |= {as_symbol(d)}
                     # Add necessary information related to Dimensions
                     for k in d.indices:
-                        if k.size is not None:
+                        if k.end is not None:
                             continue
                         # Dimension size
-                        size = k.symbolic_size
-                        if size not in seen:
-                            args.append((k.ccode, k))
-                            seen |= {size}
+                        start = k.symbolic_start
+                        if start not in seen:
+                            args.append((k.ccode_s, k))
+                            seen |= {start}
+                        end = k.symbolic_end
+                        if end not in seen:
+                            args.append((k.ccode_e, k))
                         # Dimension index may be required too
                         if k in required - seen:
                             index_arg = (k.name, ScalarFunction(name=k.name,
