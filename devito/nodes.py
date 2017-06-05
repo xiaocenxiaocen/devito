@@ -9,7 +9,7 @@ import cgen as c
 from sympy import Eq, preorder_traversal
 
 from devito.cgen_utils import ccode
-from devito.dimension import Dimension
+from devito.dimension import Dimension, TimeDimension
 from devito.dse import as_symbol
 from devito.interfaces import IndexedData, SymbolicData, TensorFunction
 from devito.stencil import Stencil
@@ -146,8 +146,19 @@ class FunCall(Node):
         return "FunCall::\n\t%s(...)" % self.name
 
     @property
+    def _cparameters(self):
+        """Generate arguments signature."""
+        cparameters = []
+        for v in self.params:
+            if isinstance(v, tuple):
+                cparameters += list(v)
+            else:
+                cparameters.append(v)
+        return cparameters
+    
+    @property
     def ccode(self):
-        return c.Statement('%s(%s)' % (self.name, ','.join(self.params)))
+        return c.Statement('%s(%s)' % (self.name, ','.join(self._cparameters)))
 
 
 class Expression(Node):
@@ -284,13 +295,19 @@ class Iteration(Node):
         else:
             self.limits = list((0, limits, 1))
 
+        is_time = True if isinstance(dimension, TimeDimension) else False
+            
         # Replace open limits with variables names
         if self.limits[1] is None:
-            # FIXME: Add dimension size as variable bound.
-            # Needs further generalisation to support loop blocking.
             dim = self.dim.parent if self.dim.is_Buffered else self.dim
-            self.limits[1] = dim.size or dim.symbolic_size
-
+            if is_time and dim.size is None:
+                self.limits[0] = dim.symbolic_start
+                self.limits[1] = dim.symbolic_end
+            else:
+                # FIXME: Add dimension size as variable bound.
+                # Needs further generalisation to support loop blocking.
+                self.limits[1] = dim.size or dim.symbolic_size
+        
         # Record offsets to later adjust loop limits accordingly
         self.offsets = [0, 0]
         for off in (offsets or {}):
@@ -334,17 +351,22 @@ class Iteration(Node):
                 pass
         else:
             end = self.limits[1]
-
+        
         # For reverse dimensions flip loop bounds
-        if self.dim.reverse:
-            loop_init = c.InlineInitializer(c.Value("int", self.index),
-                                            ccode('%s - 1' % end))
-            loop_cond = '%s >= %s' % (self.index, ccode(start))
-            loop_inc = '%s -= %s' % (self.index, self.limits[2])
+        if not isinstance(self.dim, TimeDimension):
+            if self.dim.reverse:
+                loop_init = c.InlineInitializer(c.Value("int", self.index),
+                                                    ccode('%s - 1' % end))
+                loop_cond = '%s >= %s' % (self.index, ccode(start))
+                loop_inc = '%s -= %s' % (self.index, self.limits[2])
+            else:
+                loop_init = c.InlineInitializer(c.Value("int", self.index), ccode(start))
+                loop_cond = '%s < %s' % (self.index, ccode(end))
+                loop_inc = '%s += %s' % (self.index, self.limits[2])
         else:
             loop_init = c.InlineInitializer(c.Value("int", self.index), ccode(start))
-            loop_cond = '%s < %s' % (self.index, ccode(end))
-            loop_inc = '%s += %s' % (self.index, self.limits[2])
+            loop_cond = '(({1} > {0}) ? ({2} < {1}) : ({2} > {1}))'.format(ccode(start), ccode(end), self.index)
+            loop_inc = '({2} > {1}) ? {0}++ : {0}--'.format(self.index, self.limits[0], self.limits[1])
 
         return c.For(loop_init, loop_cond, loop_inc, c.Block(loop_body))
 
@@ -394,6 +416,8 @@ class Iteration(Node):
         available (either statically known or provided through ``start``/
         ``finish``). ``None`` is used as a placeholder in the returned 2-tuple
         if a limit is unknown."""
+        if start is not None and finish is not None:
+            return (start, finish)
         try:
             start = int(self.limits[0]) - self.offsets[0]
         except (TypeError, ValueError):
@@ -467,7 +491,7 @@ class Function(Node):
         cparameters = []
         for v in self.parameters:
             if isinstance(v, Dimension):
-                cparameters.append(v.decl)
+                cparameters += v.decl
             elif v.is_ScalarFunction:
                 cparameters.append(c.Value('const int', v.name))
             else:

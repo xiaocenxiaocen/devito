@@ -10,6 +10,7 @@ class Dimension(Symbol):
 
     is_Buffered = False
     is_Lowered = False
+    is_Time = False
 
     """Index object that represents a problem dimension and thus
     defines a potential iteration space.
@@ -42,7 +43,7 @@ class Dimension(Symbol):
     @property
     def decl(self):
         """Variable declaration for C-level kernel headers"""
-        return cgen.Value("const int", self.ccode)
+        return [cgen.Value("const int", self.ccode)]
 
     @property
     def dtype(self):
@@ -108,9 +109,49 @@ class LoweredDimension(Dimension):
         return self.buffered.reverse
 
 
+class TimeDimension(Dimension):
+    is_Time = True
+
+    @property
+    def symbolic_size(self):
+        """The symbolic size of this dimension."""
+        return self.symbolic_end
+
+    @property
+    def ccode(self):
+        return (self.ccode_s, self.ccode_e)
+    
+    @property
+    def symbolic_start(self):
+        return Symbol(self.ccode_s)
+
+    @property
+    def symbolic_end(self):
+        return Symbol(self.ccode_e)
+    
+    @property
+    def ccode_s(self):
+        """C-level variable name of this dimension"""
+        return "%s_s" % self.name if self.size is None else "0"
+
+    @property
+    def ccode_e(self):
+        """C-level variable name of this dimension"""
+        return "%s_e" % self.name if self.size is None else "%d" % self.size
+    
+    @property
+    def decl(self):
+        """Variable declaration for C-level kernel headers"""
+        return [cgen.Value("const int", self.ccode_s), cgen.Value("const int", self.ccode_e)]
+
+
+class BufferedTimeDimension(TimeDimension, BufferedDimension):
+    pass
+
+
 # Default dimensions for time
-time = Dimension('time')
-t = BufferedDimension('t', parent=time)
+time = TimeDimension('time')
+t = BufferedTimeDimension('t', parent=time)
 
 # Default dimensions for space
 x = Dimension('x')

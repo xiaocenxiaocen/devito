@@ -84,6 +84,7 @@ class BasicRewriter(AbstractRewriter):
                             continue
                         # Dimension size
                         size = k.symbolic_size
+
                         if size not in seen:
                             args.append((k.ccode, k))
                             seen |= {size}

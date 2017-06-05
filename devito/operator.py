@@ -12,7 +12,7 @@ import sympy
 from devito.autotuning import autotune
 from devito.cgen_utils import Allocator, blankline
 from devito.compiler import jit_compile, load
-from devito.dimension import Dimension, time
+from devito.dimension import Dimension, time, TimeDimension
 from devito.dle import compose_nodes, filter_iterations, transform
 from devito.dse import (clusterize, estimate_cost, estimate_memory, indexify,
                         rewrite, q_indexed)
@@ -107,7 +107,7 @@ class OperatorBasic(Function):
         dimensions += [d.parent for d in dimensions if d.is_Buffered]
         parameters += filter_ordered([d for d in dimensions if d.size is None],
                                      key=operator.attrgetter('name'))
-
+        
         # Resolve and substitute dimensions for loop index variables
         subs = {}
         nodes = ResolveIterationVariable().visit(nodes, subs=subs)
@@ -143,20 +143,21 @@ class OperatorBasic(Function):
         dim_sizes = dict([(arg.name, arg.size) for arg in self.parameters
                           if isinstance(arg, Dimension)])
 
-        # Override explicitly provided dim sizes from **kwargs
-        for name, value in kwargs.items():
+        o_vals = {}
+        for name, arg in kwargs.items():
+            # Override explicitly provided dim sizes from **kwargs
             if name in dim_sizes:
-                dim_sizes[name] = value
+                dim_sizes[name] = arg
 
-        # Have we been provided substitutes for symbol data?
-        # Only SymbolicData can be overridden with this route
-        r_args = [f_n for f_n, f in arguments.items() if isinstance(f, SymbolicData)]
-        o_vals = OrderedDict([arg for arg in kwargs.items() if arg[0] in r_args])
+            # Override explicitly provided SymbolicData
+            if name in arguments and isinstance(arguments[name], SymbolicData):
+                # Override the original symbol
+                o_vals[name] = arg
 
-        # Are any passed symbols composite? i.e. are they composed of other symbols?
-        for sym in o_vals.values():
-            if isinstance(sym, SymbolicData) and sym.is_CompositeData:
-                o_vals.update(OrderedDict([(c.name, c) for c in sym.children]))
+                original = arguments[name]
+                if original.is_CompositeData:
+                    for orig, child in zip(original.children, arg.children):
+                        o_vals[orig.name] = child
 
         # Replace the overridden values with the provided ones
         for argname in o_vals.keys():
@@ -188,10 +189,19 @@ class OperatorBasic(Function):
                 if dim_sizes[dim.name] is None:
                     # We haven't determined the size of this dimension yet,
                     # try to infer it from the data shape.
-                    dim_sizes[dim.name] = shape[i]
+                    if isinstance(dim, TimeDimension):
+                        dim_sizes[dim.name] = (0, shape[i])
+                    else:
+                        dim_sizes[dim.name] = shape[i]
                 else:
                     # We know the dimension size, check if data shape agrees
-                    if not dim_sizes[dim.name] <= shape[i]:
+                    if isinstance(dim_sizes[dim.name], tuple):
+                        if (dim_sizes[dim.name][0] > shape[i] or dim_sizes[dim.name][1] > shape[i]):
+                            error('Size of dimension %s was determined to be %s, '
+                              'but data for symbol %s has shape %d.'
+                              % (dim.name, str(dim_sizes[dim.name]), fname, shape[i]))
+                            raise InvalidArgument('Wrong data shape encountered')
+                    elif not dim_sizes[dim.name] <= shape[i]:
                         error('Size of dimension %s was determined to be %d, '
                               'but data for symbol %s has shape %d.'
                               % (dim.name, dim_sizes[dim.name], fname, shape[i]))
@@ -229,7 +239,12 @@ class OperatorBasic(Function):
         # Insert loop size arguments from dimension values
         d_args = [d for d in arguments.values() if isinstance(d, Dimension)]
         for d in d_args:
-            arguments[d.name] = dim_sizes[d.name]
+            if not isinstance(dim_sizes[d.name], tuple):
+                arguments[d.name] = dim_sizes[d.name]
+            else:
+                del arguments[d.name]
+                arguments[d.ccode_s] = dim_sizes[d.name][0]
+                arguments[d.ccode_e] = dim_sizes[d.name][1]
 
         # Might have been asked to auto-tune the block size
         if maybe_autotune:
@@ -238,10 +253,10 @@ class OperatorBasic(Function):
         # Add profiler structs
         arguments.update(self._extra_arguments())
 
-        # Sanity check argument derivation
         for name, arg in arguments.items():
             if isinstance(arg, SymbolicData) or isinstance(arg, Dimension):
                 raise ValueError('Runtime argument %s not defined' % arg)
+
         return arguments, dim_sizes
 
     @property
@@ -353,7 +368,8 @@ class OperatorBasic(Function):
                 needed = entries[index:]
 
                 # Build and insert the required Iterations
-                iters = [Iteration([], j.dim, j.dim.size, offsets=j.ofs) for j in needed]
+                iters = [Iteration([], j.dim, (0, j.dim.size, 1),
+                                       offsets=j.ofs) for j in needed]
                 body, tree = compose_nodes(iters + [expressions], retrieve=True)
                 scheduling = OrderedDict(zip(needed, tree))
                 if root is None:
@@ -499,7 +515,7 @@ class OperatorCore(OperatorBasic):
         """Apply the stencil kernel to a set of data objects"""
         # Build the arguments list to invoke the kernel function
         arguments, dim_sizes = self.arguments(*args, **kwargs)
-
+        print(list(arguments.items()))
         # Invoke kernel function with args
         self.cfunction(*list(arguments.values()))
 
@@ -559,13 +575,26 @@ class OperatorCore(OperatorBasic):
             time = self.profiler.timings[profile.timer]
 
             # Flops
-            itershape = [i.extent(finish=dim_sizes.get(dims[i].name)) for i in itspace]
+            #itershape = [i.extent(finish=dim_sizes.get(dims[i].name)) for i in itspace]
+            itershape = []
+            for i in itspace:
+                size = dim_sizes.get(dims[i].name)
+                if isinstance(size, tuple):
+                    itershape.append(i.extent(start=size[0], finish=size[1]))
+                else:
+                    itershape.append(i.extent(finish=size))
             iterspace = reduce(operator.mul, itershape)
+
             flops = float(profile.ops*iterspace)
             gflops = flops/10**9
 
             # Compulsory traffic
-            datashape = [i.dim.size or dim_sizes[dims[i].name] for i in itspace]
+            datashape = []
+            for i in itspace:
+                size = i.dim.size or dim_sizes[dims[i].name]
+                if isinstance(size, tuple):
+                    size = abs(size[1] - size[0])
+                datashape.append(size)
             dataspace = reduce(operator.mul, datashape)
             traffic = profile.memory*dataspace*self.dtype().itemsize
 
