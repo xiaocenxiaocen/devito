@@ -23,7 +23,7 @@ from devito.nodes import (Element, Expression, Function, Iteration, List,
 from devito.parameters import configuration
 from devito.profiling import Profiler
 from devito.stencil import Stencil
-from devito.tools import as_tuple, filter_ordered, flatten
+from devito.tools import as_tuple, filter_ordered, flatten, ordered_dict_replace
 from devito.visitors import (FindNodes, FindSections, FindSymbols, FindScopes,
                              IsPerfectIteration, ResolveIterationVariable,
                              SubstituteExpression, Transformer)
@@ -142,7 +142,7 @@ class OperatorBasic(Function):
         arguments = OrderedDict([(arg.name, arg) for arg in self.parameters])
         dim_sizes = dict([(arg.name, arg.size) for arg in self.parameters
                           if isinstance(arg, Dimension)])
-
+        print(dim_sizes)
         o_vals = {}
         for name, arg in kwargs.items():
             # Override explicitly provided dim sizes from **kwargs
@@ -158,11 +158,11 @@ class OperatorBasic(Function):
                 if original.is_CompositeData:
                     for orig, child in zip(original.children, arg.children):
                         o_vals[orig.name] = child
-
+        print(dim_sizes)
         # Replace the overridden values with the provided ones
         for argname in o_vals.keys():
             arguments[argname] = o_vals[argname]
-
+        print(dim_sizes)
         # Traverse positional args and infer loop sizes for open dimensions
         f_args = [(name, f) for name, f in arguments.items()
                   if isinstance(f, SymbolicData)]
@@ -216,7 +216,7 @@ class OperatorBasic(Function):
                     dim_sizes[d.parent.name] = dim_sizes[d.name]
                 if dim_sizes[d.name] is None:
                     dim_sizes[d.name] = dim_sizes[d.parent.name]
-
+        
         # Add user-provided block sizes, if any
         dle_arguments = OrderedDict()
         for i in self._dle_state.arguments:
@@ -235,17 +235,20 @@ class OperatorBasic(Function):
             else:
                 dle_arguments[i.argument.name] = dim_size
         dim_sizes.update(dle_arguments)
-
+        
         # Insert loop size arguments from dimension values
         d_args = [d for d in arguments.values() if isinstance(d, Dimension)]
+        print(d_args)
         for d in d_args:
-            if not isinstance(dim_sizes[d.name], tuple):
+            if not isinstance(d, TimeDimension):
                 arguments[d.name] = dim_sizes[d.name]
             else:
-                del arguments[d.name]
-                arguments[d.ccode_s] = dim_sizes[d.name][0]
-                arguments[d.ccode_e] = dim_sizes[d.name][1]
-
+                if not isinstance(dim_sizes[d.name], tuple):
+                    dim_sizes[d.name] = (0, dim_sizes[d.name])
+                if getattr(d, 'reverse', False):
+                    dim_sizes[d.name] = dim_sizes[d.name][::-1]
+                arguments = ordered_dict_replace(arguments, d.name, [(d.ccode_s, dim_sizes[d.name][0]), (d.ccode_e, dim_sizes[d.name][1])])
+        print(arguments)
         # Might have been asked to auto-tune the block size
         if maybe_autotune:
             arguments = self._autotune(arguments)

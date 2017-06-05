@@ -195,3 +195,17 @@ class DefaultOrderedDict(OrderedDict):
 
     def __copy__(self):
         return type(self)(self.default_factory, self)
+
+
+def ordered_dict_replace(d, to_replace_key, replacements):
+    new_one = d.__class__()
+    for key, value in d.items():
+        if key==to_replace_key:
+            if isinstance(replacements, tuple):
+                new_one[replacements[0]] = replacements[1]
+            else:
+                for k, v in replacements:
+                    new_one[k] = v
+        else:
+           new_one[key]=value 
+    return new_one
