@@ -2,11 +2,11 @@ from sympy import Eq
 from sympy.abc import h, s
 
 from devito import Operator, Forward, Backward, DenseData, TimeData, time
-from examples.seismic import PointSource, Receiver
+from examples.seismic import PointSource, Receiver, Boundary_rec
 
 
 def ForwardOperator(model, source, receiver, time_order=2, space_order=4,
-                    save=False, **kwargs):
+                    save=False, reverse=False, **kwargs):
     """
     Constructor method for the forward modelling operator in an acoustic media
 
@@ -21,12 +21,17 @@ def ForwardOperator(model, source, receiver, time_order=2, space_order=4,
 
     # Create symbols for forward wavefield, source and receivers
     u = TimeData(name='u', shape=model.shape_domain, time_dim=source.nt,
-                 time_order=time_order, space_order=space_order, save=save,
+                 time_order=time_order, space_order=space_order,
+                 save=(save and not reverse),
                  dtype=model.dtype)
     src = PointSource(name='src', ntime=source.nt, ndim=source.ndim,
                       npoint=source.npoint)
     rec = Receiver(name='rec', ntime=receiver.nt, ndim=receiver.ndim,
                    npoint=receiver.npoint)
+
+    if save and reverse:
+        bc_save = Boundary_rec(name='bc', model=model, receiver=rec)
+
 
     if time_order == 2:
         biharmonic = 0
@@ -53,8 +58,11 @@ def ForwardOperator(model, source, receiver, time_order=2, space_order=4,
 
     # Create interpolation expression for receivers
     rec_term = rec.interpolate(expr=u, u_t=ti, offset=model.nbpml)
+    bc_rec_term = []
+    if save and reverse:
+        bc_rec_term = bc_save.interpolate(expr=u, u_t=ti, offset=model.nbpml)
 
-    return Operator(eqn + src_term + rec_term,
+    return Operator(eqn + src_term + rec_term + bc_rec_term,
                     subs={s: dt, h: model.get_spacing()},
                     time_axis=Forward, name='Forward', **kwargs)
 

@@ -3,7 +3,7 @@ import numpy as np
 from devito.logger import info
 from examples.seismic.acoustic.wavesolver import AcousticWaveSolver
 from examples.seismic import Model, PointSource, Receiver
-
+from examples.seismic.boundaries import Boundary_rec
 
 # Velocity models
 def smooth10(vel, shape):
@@ -24,12 +24,12 @@ def source(t, f0):
     return (1-2.*r**2)*np.exp(-r**2)
 
 
-def run(dimensions=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=1000.0,
+def run(dimensions=(50, 50, 50), tn=1000.0,
         time_order=2, space_order=4, nbpml=40, dse='advanced', dle='advanced',
         full_run=False):
-
-    origin = (0., 0., 0.)
-
+    ndim = len(dimensions)
+    origin = tuple([0.]*len(dimensions))
+    spacing = tuple([20.]*len(dimensions))
     # True velocity
     true_vp = 2.
 
@@ -48,27 +48,31 @@ def run(dimensions=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=1000.0,
     t0 = 0.0
     nt = int(1+(tn-t0)/dt)
 
+    # Source location
+    location = np.zeros((1, ndim), dtype=np.float32)
+    location[0, :-1] = [origin[i] + dimensions[i] * spacing[i] * .5
+                        for i in range(ndim - 1)]
+    location[0, -1] = origin[-1] + 2 * spacing[-1]
+    # Receivers locations
+    receiver_coords = np.zeros((dimensions[0], ndim), dtype=np.float32)
+    receiver_coords[:, 0] = np.linspace(0, origin[0] +
+                                        (dimensions[0] - 1) * spacing[0],
+                                        num=dimensions[0])
+    receiver_coords[:, 1:] = location[0, 1:]
+
     # Source geometry
     time_series = np.zeros((nt, 1))
-
     time_series[:, 0] = source(np.linspace(t0, tn, nt), f0)
 
-    location = np.zeros((1, 3))
-    location[0, 0] = origin[0] + dimensions[0] * spacing[0] * 0.5
-    location[0, 1] = origin[1] + dimensions[1] * spacing[1] * 0.5
-    location[0, 2] = origin[1] + 2 * spacing[2]
     src = PointSource(name='src', data=time_series, coordinates=location)
 
     # Receiver geometry
-    receiver_coords = np.zeros((101, 3))
-    receiver_coords[:, 0] = np.linspace(0, origin[0] +
-                                        dimensions[0] * spacing[0], num=101)
-    receiver_coords[:, 1] = origin[1] + dimensions[1] * spacing[1] * 0.5
-    receiver_coords[:, 2] = location[0, 1]
     rec = Receiver(name='rec', ntime=nt, coordinates=receiver_coords)
 
     solver = AcousticWaveSolver(model, source=src, receiver=rec,
                                 time_order=time_order, space_order=space_order)
+
+    # bc = Boundary_rec(name='bc', model=model, receiver=rec)
 
     info("Applying Forward")
     rec, u, summary = solver.forward(save=full_run, dse=dse, dle=dle)
@@ -85,4 +89,4 @@ def run(dimensions=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=1000.0,
 
 
 if __name__ == "__main__":
-    run(full_run=True, space_order=6, time_order=2)
+    run(full_run=True, space_order=6, time_order=2, dimensions=(50, 50))

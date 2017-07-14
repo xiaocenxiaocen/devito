@@ -1,7 +1,7 @@
 from cached_property import cached_property
 
 from devito import DenseData, TimeData
-from examples.seismic import PointSource, Receiver
+from examples.seismic import PointSource, Receiver, Boundary_rec
 from examples.seismic.acoustic.operators import (
     ForwardOperator, AdjointOperator, GradientOperator, BornOperator
 )
@@ -46,11 +46,11 @@ class AcousticWaveSolver(object):
                                space_order=self.space_order, **self._kwargs)
 
     @cached_property
-    def op_fwd_save(self):
+    def op_fwd_save(self, reverse=False):
         """Cached operator for forward runs with unrolled wavefield"""
         return ForwardOperator(self.model, save=True, source=self.source,
                                receiver=self.receiver, time_order=self.time_order,
-                               space_order=self.space_order, **self._kwargs)
+                               space_order=self.space_order, reverse=reverse, **self._kwargs)
 
     @property
     def op_adj(self):
@@ -73,7 +73,8 @@ class AcousticWaveSolver(object):
                             receiver=self.receiver, time_order=self.time_order,
                             space_order=self.space_order, **self._kwargs)
 
-    def forward(self, src=None, rec=None, u=None, m=None, save=False, **kwargs):
+    def forward(self, src=None, rec=None, u=None, m=None, save=False,
+                reverse=False, **kwargs):
         """
         Forward modelling function that creates the necessary
         data objects for running a forward modelling operator.
@@ -97,18 +98,25 @@ class AcousticWaveSolver(object):
         # Create the forward wavefield if not provided
         if u is None:
             u = TimeData(name='u', shape=self.model.shape_domain,
-                         save=save, time_dim=self.source.nt,
+                         save=(save and not reverse), time_dim=self.source.nt,
                          time_order=self.time_order,
                          space_order=self.space_order,
                          dtype=self.model.dtype)
 
+        if save and reverse:
+            bc_save = Boundary_rec(name='bc', model=self.model, receiver=rec)
         # Pick m from model unless explicitly provided
         if m is None:
             m = m or self.model.m
 
         # Execute operator and return wavefield and receiver data
-        if save:
+        if save and not reverse:
             summary = self.op_fwd_save.apply(src=src, rec=rec, u=u, m=m, **kwargs)
+        elif save and reverse:
+            summary = self.op_fwd_save(reverse=reverse).apply(src=src, rec=rec,
+                                                              u=u, m=m, bcs=bc_save,
+                                                              **kwargs)
+            return rec, u, bc_save, summary
         else:
             summary = self.op_fwd.apply(src=src, rec=rec, u=u, m=m, **kwargs)
         return rec, u, summary
