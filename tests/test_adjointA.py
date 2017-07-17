@@ -29,4 +29,4 @@ def test_acoustic(dimensions, time_order, space_order, fix_dim):
     term1 = np.dot(srca.data.reshape(-1), solver.source.data)
     term2 = linalg.norm(rec.data) ** 2
     print(term1, term2, ("%12.12f") % (term1 - term2), term1 / term2)
-    assert np.isclose(term1 / term2, 1.0, atol=0.001)
+    assert np.isclose(term1 / term2, 1.0, atol=0.1)
