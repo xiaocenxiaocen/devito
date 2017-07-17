@@ -214,3 +214,37 @@ class PointData(CompositeData):
         return [Eq(field.subs(vsub),
                    field.subs(vsub) + expr.subs(subs).subs(vsub) * b.subs(subs))
                 for b, vsub in zip(self.coefficients, idx_subs)]
+
+    def assign(self, field, expr, offset=0, **kwargs):
+        """Symbol for assignment of an expression onto a grid
+
+        :param field: The grid field into which we assign the point value.
+        :param expr: The expression to assign.
+        :param offset: Additional offset from the boundary for
+                       absorbing boundary conditions.
+        :param u_t: (Optional) time index to use for indexing into `field`.
+        :param p_t: (Optional) time index to use for indexing into `expr`.
+        """
+        u_t = kwargs.get('u_t', field.indices[0])
+        p_t = kwargs.get('p_t', self.indices[0])
+        expr = indexify(expr).subs(self.indices[0], p_t)
+        field = indexify(field).subs(field.indices[0], u_t)
+        variables = list(retrieve_indexed(expr)) + [field]
+
+        # List of indirection indices for all adjacent grid points
+        index_matrix = [tuple(idx + ii + offset for ii, idx
+                              in zip(inc, self.coordinate_indices))
+                        for inc in self.point_increments]
+
+        # Generate index substituions for all grid variables except
+        # the sparse `PointData` types
+        idx_subs = []
+        for i, idx in enumerate(index_matrix):
+            v_subs = [(v, v.base[v.indices[:-self.ndim] + idx])
+                      for v in variables if not v.base.function.is_PointData]
+            idx_subs += [OrderedDict(v_subs)]
+
+        # Substitute coordinate base symbols into the coefficients
+        subs = OrderedDict(zip(self.point_symbols, self.coordinate_bases))
+        return [Eq(field.subs(vsub), expr.subs(subs).subs(vsub) * b.subs(subs))
+                for b, vsub in zip(self.coefficients, idx_subs)]
