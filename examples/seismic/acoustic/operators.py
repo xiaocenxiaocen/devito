@@ -163,6 +163,67 @@ def GradientOperator(model, source, receiver, time_order=2, space_order=4, **kwa
                     time_axis=Backward, name='Gradient', **kwargs)
 
 
+def GradientOperator_reversal(model, source, receiver, time_order=2, space_order=4, **kwargs):
+    """
+    Constructor method for the gradient operator in an acoustic media
+
+    :param model: :class:`Model` object containing the physical parameters
+    :param source: :class:`PointData` object containing the source geometry
+    :param receiver: :class:`PointData` object containing the acquisition geometry
+    :param time_order: Time discretization order
+    :param space_order: Space discretization order
+    """
+    m, damp = model.m, model.damp
+
+    # Gradient symbol and wavefield symbols
+    grad = DenseData(name='grad', shape=model.shape_domain,
+                     dtype=model.dtype)
+    u = TimeData(name='u', shape=model.shape_domain, save=False,
+                 time_dim=source.nt, time_order=time_order,
+                 space_order=space_order, dtype=model.dtype)
+    v = TimeData(name='v', shape=model.shape_domain, save=False,
+                 time_order=time_order, space_order=space_order,
+                 dtype=model.dtype)
+    rec = Receiver(name='rec', ntime=receiver.nt, ndim=receiver.ndim,
+                   npoint=receiver.npoint)
+    bc_save = Boundary_rec(name='bc', model=model, receiver=rec)
+
+    if time_order == 2:
+        biharmonic = 0
+        biharmonicu = 0
+        dt = model.critical_dt
+        gradient_update = Eq(grad, grad - u.dt2 * v)
+    else:
+        biharmonic = v.laplace2(1/m)
+        biharmonicu = u.laplace2(1/m)
+        biharmonicug = - u.laplace2(1/(m**2))
+        dt = 1.73 * model.critical_dt
+        gradient_update = Eq(grad, grad - (u.dt2 - s**2 / 12.0 * biharmonicug) * v)
+
+    # Derive stencil from symbolic equation
+    stencil = 1.0 / (2.0 * m + s * damp) * \
+        (4.0 * m * v + (s * damp - 2.0 * m) *
+         v.forward + 2.0 * s ** 2 * (v.laplace + s**2 / 12.0 * biharmonic))
+    eqn = Eq(v.backward, stencil)
+    stencilu = 1.0 / (2.0 * m + s * damp) * \
+        (4.0 * m * u + (s * damp - 2.0 * m) *
+         u.forward + 2.0 * s ** 2 * (u.laplace + s**2 / 12.0 * biharmonicu))
+    eqnu = Eq(u.backward, stencilu)
+    # Add expression for receiver injection
+    ti = v.indices[0]
+    tiu = u.indices[0]
+    receivers = rec.inject(field=v, u_t=ti - 1, offset=model.nbpml,
+                           expr=rec * dt * dt / m, p_t=time)
+    bc_rec = bc_save.assign(field=u, u_t=tiu, offset=model.nbpml,
+                            expr=bc_save, p_t=time)
+
+    # d_bc_rec = bc_save.assign_dt(field=u, u_t=tiu, offset=model.nbpml,
+    #                              expr=bc_save, p_t=time)
+    return Operator([eqn] + bc_rec + [eqnu] + receivers + [gradient_update],
+                    subs={s: dt, h: model.get_spacing()},
+                    time_axis=Backward, name='Gradient', **kwargs)
+
+
 def BornOperator(model, source, receiver, time_order=2, space_order=4, **kwargs):
     """
     Constructor method for the Linearized Born operator in an acoustic media

@@ -3,7 +3,7 @@ from cached_property import cached_property
 from devito import DenseData, TimeData
 from examples.seismic import PointSource, Receiver, Boundary_rec
 from examples.seismic.acoustic.operators import (
-    ForwardOperator, AdjointOperator, GradientOperator, BornOperator
+    ForwardOperator, AdjointOperator, GradientOperator, BornOperator, GradientOperator_reversal
 )
 
 
@@ -46,11 +46,18 @@ class AcousticWaveSolver(object):
                                space_order=self.space_order, **self._kwargs)
 
     @cached_property
-    def op_fwd_save(self, reverse=False):
+    def op_fwd_save(self):
         """Cached operator for forward runs with unrolled wavefield"""
         return ForwardOperator(self.model, save=True, source=self.source,
                                receiver=self.receiver, time_order=self.time_order,
-                               space_order=self.space_order, reverse=reverse, **self._kwargs)
+                               space_order=self.space_order, **self._kwargs)
+
+    @cached_property
+    def op_fwd_save_rev(self):
+        """Cached operator for forward runs with unrolled wavefield"""
+        return ForwardOperator(self.model, save=True, source=self.source,
+                               receiver=self.receiver, time_order=self.time_order,
+                               space_order=self.space_order, reverse=True, **self._kwargs)
 
     @property
     def op_adj(self):
@@ -65,6 +72,13 @@ class AcousticWaveSolver(object):
         return GradientOperator(self.model, save=False, source=self.source,
                                 receiver=self.receiver, time_order=self.time_order,
                                 space_order=self.space_order, **self._kwargs)
+
+    @property
+    def op_grad_rev(self):
+        """Cached operator for gradient runs"""
+        return GradientOperator_reversal(self.model, save=False, source=self.source,
+                                         receiver=self.receiver, time_order=self.time_order,
+                                         space_order=self.space_order, **self._kwargs)
 
     @property
     def op_born(self):
@@ -113,9 +127,9 @@ class AcousticWaveSolver(object):
         if save and not reverse:
             summary = self.op_fwd_save.apply(src=src, rec=rec, u=u, m=m, **kwargs)
         elif save and reverse:
-            summary = self.op_fwd_save(reverse=reverse).apply(src=src, rec=rec,
-                                                              u=u, m=m, bcs=bc_save,
-                                                              **kwargs)
+            summary = self.op_fwd_save_rev.apply(src=src, rec=rec,
+                                                 u=u, m=m, bcs=bc_save,
+                                                 **kwargs)
             return rec, u, bc_save, summary
         else:
             summary = self.op_fwd.apply(src=src, rec=rec, u=u, m=m, **kwargs)
@@ -155,7 +169,7 @@ class AcousticWaveSolver(object):
         summary = self.op_adj.apply(srca=srca, rec=rec, v=v, m=m, **kwargs)
         return srca, v, summary
 
-    def gradient(self, rec, u, v=None, grad=None, m=None, **kwargs):
+    def gradient(self, rec, u, v=None, grad=None, m=None, reverse=False, bc_save=None, **kwargs):
         """
         Gradient modelling function for computing the adjoint of the
         Linearized Born modelling function, ie. the action of the
@@ -185,8 +199,11 @@ class AcousticWaveSolver(object):
         # Pick m from model unless explicitly provided
         if m is None:
             m = m or self.model.m
-
-        summary = self.op_grad.apply(rec=rec, grad=grad, v=v, u=u, m=m, **kwargs)
+        if not reverse:
+            summary = self.op_grad.apply(rec=rec, grad=grad, v=v, u=u, m=m, **kwargs)
+        else:
+            assert(bc_save is not None)
+            summary = self.op_grad_rev.apply(rec=rec, grad=grad, v=v, u=u, m=m, bc=bc_save, **kwargs)
         return grad, summary
 
     def born(self, dmin, src=None, rec=None, u=None, U=None, m=None, **kwargs):
