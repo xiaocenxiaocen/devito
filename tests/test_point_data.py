@@ -66,7 +66,8 @@ def test_inject(shape, coords, result, npoints=19):
     p = points(ranges=coords, npoints=npoints)
 
     expr = p.inject(a, Function('FLOAT')(1.))
-    Operator(expr, subs={h: spacing})(a=a, t=1)
+
+    Operator(expr, subs={h: spacing})(a=a)
 
     indices = [slice(4, 6, 1) for _ in coords]
     indices[0] = slice(1, -1, 1)
@@ -89,7 +90,7 @@ def test_inject_from_field(shape, coords, result, npoints=19):
     p = points(ranges=coords, npoints=npoints)
 
     expr = p.inject(field=a, expr=b)
-    Operator(expr, subs={h: spacing})(a=a, b=b, t=1)
+    Operator(expr, subs={h: spacing})(a=a, b=b)
 
     indices = [slice(4, 6, 1) for _ in coords]
     indices[0] = slice(1, -1, 1)
@@ -123,4 +124,4 @@ def test_adjoint_inject_interpolate(shape, coords,
     # P^T y => a
     term1 = np.dot(p2.data.reshape(-1), p.data.reshape(-1))
     term2 = np.dot(c.data.reshape(-1), a.data.reshape(-1))
-    assert np.isclose((term1-term2)/term1, 0., atol=np.finfo(np.float32).eps)
+    assert np.isclose((term1-term2) / term1, 0., atol=1.e-6)
