@@ -14,7 +14,6 @@ class Boundary_rec(Receiver):
     """
 
     def __new__(cls, name, model, receiver, ndim=None, **kwargs):
-        p_dim = kwargs.get('dimension', Dimension('p_%s' % name))
         ndim = ndim or len(model.shape)
         ntime = receiver.nt
         if ndim == 3:
@@ -55,7 +54,7 @@ class Boundary_rec(Receiver):
             error("1D, 2D or 3D models only")
 
         # Create the underlying PointData object
-        obj = Receiver(name=name, ntime=ntime,
+        obj = Receiver(name=name, ntime=ntime, npoint=npoints, ndim=ndim,
                        coordinates=coordinates, **kwargs)
 
         return obj

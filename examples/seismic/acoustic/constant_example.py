@@ -76,6 +76,7 @@ def run(dimensions=(50, 50, 50), tn=1000.0,
 
     info("Applying Forward")
     rec, u, bcc, summary = solver.forward(save=full_run, dse=dse, dle=dle, reverse=True)
+    # rec, u, summary = solver.forward(save=full_run, dse=dse, dle=dle)
 
     if not full_run:
         return summary.gflopss, summary.oi, summary.timings, [rec, u.data]
@@ -85,6 +86,7 @@ def run(dimensions=(50, 50, 50), tn=1000.0,
     info("Applying Born")
     solver.born(dm, dse=dse, dle=dle)
     info("Applying Gradient")
+    # grad, summary = solver.gradient(rec, u, dse=dse, dle=dle)
     grad, summary = solver.gradient(rec, u, dse=dse, dle=dle, reverse=True, bc_save=bcc)
 
     import matplotlib.pyplot as plt

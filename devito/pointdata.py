@@ -246,7 +246,7 @@ class PointData(CompositeData):
 
         # Substitute coordinate base symbols into the coefficients
         subs = OrderedDict(zip(self.point_symbols, self.coordinate_bases))
-        return [Eq(field.subs(vsub), expr.subs(subs).subs(vsub) * b.subs(subs))
+        return [Eq(field.subs(vsub), 1e-10*field.subs(vsub) + expr.subs(subs).subs(vsub) * b.subs(subs))
                 for b, vsub in zip(self.coefficients, idx_subs)]
 
     def assign_dt(self, field, expr, offset=0, **kwargs):

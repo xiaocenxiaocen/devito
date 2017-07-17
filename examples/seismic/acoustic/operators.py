@@ -179,8 +179,8 @@ def GradientOperator_reversal(model, source, receiver, time_order=2, space_order
     grad = DenseData(name='grad', shape=model.shape_domain,
                      dtype=model.dtype)
     u = TimeData(name='u', shape=model.shape_domain, save=False,
-                 time_dim=source.nt, time_order=time_order,
-                 space_order=space_order, dtype=model.dtype)
+                 time_order=time_order, space_order=space_order,
+                 dtype=model.dtype)
     v = TimeData(name='v', shape=model.shape_domain, save=False,
                  time_order=time_order, space_order=space_order,
                  dtype=model.dtype)
@@ -219,7 +219,7 @@ def GradientOperator_reversal(model, source, receiver, time_order=2, space_order
 
     # d_bc_rec = bc_save.assign_dt(field=u, u_t=tiu, offset=model.nbpml,
     #                              expr=bc_save, p_t=time)
-    return Operator([eqn] + bc_rec + [eqnu] + receivers + [gradient_update],
+    return Operator([eqn] + [eqnu] + receivers + bc_rec + [gradient_update],
                     subs={s: dt, h: model.get_spacing()},
                     time_axis=Backward, name='Gradient', **kwargs)
 

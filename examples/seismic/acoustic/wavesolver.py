@@ -128,7 +128,7 @@ class AcousticWaveSolver(object):
             summary = self.op_fwd_save.apply(src=src, rec=rec, u=u, m=m, **kwargs)
         elif save and reverse:
             summary = self.op_fwd_save_rev.apply(src=src, rec=rec,
-                                                 u=u, m=m, bcs=bc_save,
+                                                 u=u, m=m, bc=bc_save,
                                                  **kwargs)
             return rec, u, bc_save, summary
         else:
@@ -191,10 +191,11 @@ class AcousticWaveSolver(object):
         # Create the forward wavefield
         if v is None:
             v = TimeData(name='v', shape=self.model.shape_domain,
-                         save=False, time_dim=self.source.nt,
-                         time_order=self.time_order,
+                         save=False, time_order=self.time_order,
                          space_order=self.space_order,
                          dtype=self.model.dtype)
+        if reverse and bc_save is None:
+            bc_save = Boundary_rec(name='bc', model=self.model, receiver=rec)
 
         # Pick m from model unless explicitly provided
         if m is None:
@@ -202,7 +203,6 @@ class AcousticWaveSolver(object):
         if not reverse:
             summary = self.op_grad.apply(rec=rec, grad=grad, v=v, u=u, m=m, **kwargs)
         else:
-            assert(bc_save is not None)
             summary = self.op_grad_rev.apply(rec=rec, grad=grad, v=v, u=u, m=m, bc=bc_save, **kwargs)
         return grad, summary
 

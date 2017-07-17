@@ -183,8 +183,8 @@ class Operator(Function):
         autotune = autotune and kwargs.pop('autotune', False)
 
         # Make sure we've used all arguments passed
-        if len(kwargs) > 0:
-            raise InvalidArgument("Unknown arguments passed: " + ", ".join(kwargs.keys()))
+        # if len(kwargs) > 0:
+        #     raise InvalidArgument("Unknown arguments passed: " + ", ".join(kwargs.keys()))
 
         for d, v in dim_sizes.items():
             assert(dim_names[d].verify(v))

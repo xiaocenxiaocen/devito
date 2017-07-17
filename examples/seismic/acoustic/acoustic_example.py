@@ -84,8 +84,10 @@ def run(dimensions=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=1000.0,
 
     initial_vp = smooth10(solver.model.m.data, solver.model.shape_domain)
     dm = np.float32(initial_vp**2 - solver.model.m.data)
+
     info("Applying Forward")
-    rec, u, summary = solver.forward(save=full_run)
+    rec, u, bcc, summary = solver.forward(save=full_run, reverse=True, **kwargs)
+    # rec, u, summary = solver.forward(save=full_run, dse=dse, dle=dle)
 
     if not full_run:
         return summary.gflopss, summary.oi, summary.timings, [rec, u.data]
@@ -95,8 +97,9 @@ def run(dimensions=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=1000.0,
     info("Applying Born")
     solver.born(dm, **kwargs)
     info("Applying Gradient")
-    solver.gradient(rec, u, **kwargs)
+    # grad, summary = solver.gradient(rec, u, **kwargs)
+    grad, summary = solver.gradient(rec, u, reverse=True, bc_save=bcc, **kwargs)
 
 
 if __name__ == "__main__":
-    run(full_run=True, autotune=False, space_order=6, time_order=2)
+    run(full_run=True, autotune=False, space_order=6, time_order=2, dimensions=(50, 50), dse='noop', dle='noop')
