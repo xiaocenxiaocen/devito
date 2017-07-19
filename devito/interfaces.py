@@ -8,7 +8,7 @@ from devito.dimension import t, x, y, z, time
 from devito.finite_difference import (centered, cross_derivative,
                                       first_derivative, left, right,
                                       second_derivative)
-from devito.logger import debug, error, warning
+from devito.logger import info, error, warning
 from devito.memory import CMemory, first_touch
 from devito.arguments import (SymbolicDataArgProvider, ScalarFunctionArgProvider,
                               TensorFunctionArgProvider)
@@ -347,7 +347,7 @@ class DenseData(SymbolicData):
 
     def _allocate_memory(self):
         """Allocate memory in terms of numpy ndarrays."""
-        debug("Allocating memory for %s (%s)" % (self.name, str(self.shape)))
+        info("Allocating memory for %s (%s)" % (self.name, str(self.shape)))
         self._data_object = CMemory(self.shape, dtype=self.dtype)
         if self.numa:
             first_touch(self)
