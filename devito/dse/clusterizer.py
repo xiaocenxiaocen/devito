@@ -175,7 +175,7 @@ def clusterize(exprs, stencils):
                           if i.is_tensor])
 
     clusters = []
-    for k, v in mapper.items():
+    for k, v in list(mapper.items()):
         # Determine what temporaries are needed to compute /i/
         exprs = g.trace(k)
 
@@ -184,6 +184,7 @@ def clusterize(exprs, stencils):
         for i in exprs:
             stencil = stencil.add(mapper.get(i.lhs, {}))
         stencil = stencil.frozen
+        mapper[k] = stencil
 
         # Drop all non-output tensors, as computed by other clusters
         exprs = [i for i in exprs if i.lhs.is_Symbol or i.lhs == k]
