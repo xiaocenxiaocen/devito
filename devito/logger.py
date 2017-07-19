@@ -20,9 +20,9 @@ logger.addHandler(_ch)
 DEBUG = logging.DEBUG
 AUTOTUNER = 19
 INFO = logging.INFO
-DSE = 28
+DSE = 18
 DLE = DSE
-DSE_WARN = 29
+DSE_WARN = 31
 DLE_WARN = DSE_WARN
 WARNING = logging.WARNING
 ERROR = logging.ERROR
