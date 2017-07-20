@@ -117,7 +117,7 @@ def ForwardOperator_bug(model, source, receiver, time_order=2, space_order=4,
     stencildux -= s**2/(m + s*damp) * b1
     stencilduy -= s**2/(m + s*damp) * c1
 
-    stencil = [Eq(u.forward, stencilu), Eq(dux.forward, stencildux), Eq(duy.forward, stencilduy)]
+    stencil = [Eq(dux.forward, stencildux), Eq(duy.forward, stencilduy), Eq(u.forward, stencilu)]
 
     # Construct expression to inject source values
     # Note that src and field terms have differing time indices:
@@ -134,8 +134,7 @@ def ForwardOperator_bug(model, source, receiver, time_order=2, space_order=4,
                 [(i.spacing, model.get_spacing()[j]) for i, j
                  in zip(u.indices[1:], range(len(model.shape)))])
 
-    return Operator(stencil + src_term + rec_term, dle='noop',
-                    subs=subs,
+    return Operator(stencil + src_term + rec_term, subs=subs,
                     time_axis=Forward, name='Forwardbug', **kwargs)
 
 

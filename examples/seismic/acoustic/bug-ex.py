@@ -80,17 +80,13 @@ def run(dimensions=(50, 50), spacing=(20.0, 20.0), tn=1000.0,
         time_order=2, space_order=4, nbpml=40, **kwargs):
 
     solver = setup(dimensions=dimensions, spacing=spacing, nbpml=nbpml, tn=tn,
-                   space_order=space_order, time_order=time_order, **kwargs)
+                   space_order=space_order, time_order=time_order,
+                   dse='advanced', dle='advanced', **kwargs)
 
     info("Applying Forward")
     rec, u, summary = solver.forward_bug()
 
-    import matplotlib.pyplot as plt
-    from matplotlib import cm
 
-    fig = plt.figure()
-    l = plt.imshow(rec.data, vmin = -1, vmax = 1, cmap=cm.gray, aspect=.25)
-    plt.show()
     return summary.gflopss, summary.oi, summary.timings, [rec, u.data]
 
 
