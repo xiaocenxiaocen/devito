@@ -3,7 +3,7 @@ from cached_property import cached_property
 from devito import DenseData, TimeData
 from examples.seismic import PointSource, Receiver
 from examples.seismic.acoustic.operators import (
-    ForwardOperator, AdjointOperator, GradientOperator, BornOperator
+    ForwardOperator, AdjointOperator, GradientOperator, BornOperator, ForwardOperator_bug
 )
 
 
@@ -44,6 +44,13 @@ class AcousticWaveSolver(object):
         return ForwardOperator(self.model, save=False, source=self.source,
                                receiver=self.receiver, time_order=self.time_order,
                                space_order=self.space_order, **self._kwargs)
+
+    @cached_property
+    def op_fwd_bug(self):
+        """Cached operator for forward runs with buffered wavefield"""
+        return ForwardOperator_bug(self.model, save=False, source=self.source,
+                                   receiver=self.receiver, time_order=self.time_order,
+                                   space_order=self.space_order, **self._kwargs)
 
     @cached_property
     def op_fwd_save(self):
@@ -111,6 +118,53 @@ class AcousticWaveSolver(object):
             summary = self.op_fwd_save.apply(src=src, rec=rec, u=u, m=m, **kwargs)
         else:
             summary = self.op_fwd.apply(src=src, rec=rec, u=u, m=m, **kwargs)
+        return rec, u, summary
+
+    def forward_bug(self, src=None, rec=None, u=None, m=None, save=False, **kwargs):
+        """
+        Forward modelling function that creates the necessary
+        data objects for running a forward modelling operator.
+
+        :param src: Symbol with time series data for the injected source term
+        :param rec: Symbol to store interpolated receiver data
+        :param u: (Optional) Symbol to store the computed wavefield
+        :param m: (Optional) Symbol for the time-constant square slowness
+        :param save: Option to store the entire (unrolled) wavefield
+
+        :returns: Receiver, wavefield and performance summary
+        """
+        # Source term is read-only, so re-use the default
+        if src is None:
+            src = self.source
+        # Create a new receiver object to store the result
+        if rec is None:
+            rec = Receiver(name='rec', ntime=self.receiver.nt,
+                           coordinates=self.receiver.coordinates.data)
+
+        # Create the forward wavefield if not provided
+        if u is None:
+            u = TimeData(name='u', shape=self.model.shape_domain,
+                         save=save, time_dim=self.source.nt,
+                         time_order=self.time_order,
+                         space_order=self.space_order,
+                         dtype=self.model.dtype)
+            dux = TimeData(name='dux', shape=self.model.shape_domain,
+                           save=save, time_dim=self.source.nt,
+                           time_order=self.time_order,
+                           space_order=self.space_order,
+                           dtype=self.model.dtype)
+            duy = TimeData(name='duy', shape=self.model.shape_domain,
+                           save=save, time_dim=self.source.nt,
+                           time_order=self.time_order,
+                           space_order=self.space_order,
+                           dtype=self.model.dtype)
+
+        # Pick m from model unless explicitly provided
+        if m is None:
+            m = m or self.model.m
+
+        # Execute operator and return wavefield and receiver data
+        summary = self.op_fwd_bug.apply(src=src, rec=rec, u=u, dux=dux, duy=duy, m=m, **kwargs)
         return rec, u, summary
 
     def adjoint(self, rec, srca=None, v=None, m=None, **kwargs):

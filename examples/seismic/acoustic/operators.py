@@ -1,6 +1,6 @@
-from sympy import Eq
-
-from devito import Operator, Forward, Backward, DenseData, TimeData, time, t
+from sympy import Eq, solve
+from sympy.abc import s, h
+from devito import Operator, Forward, Backward, DenseData, TimeData, time, t, second_derivative, x, y
 from examples.seismic import PointSource, Receiver
 
 
@@ -61,6 +61,82 @@ def ForwardOperator(model, source, receiver, time_order=2, space_order=4,
     return Operator(eqn + src_term + rec_term,
                     subs=subs,
                     time_axis=Forward, name='Forward', **kwargs)
+
+
+def ForwardOperator_bug(model, source, receiver, time_order=2, space_order=4,
+                        save=False, **kwargs):
+    """
+    Constructor method for the forward modelling operator in an acoustic media
+
+    :param model: :class:`Model` object containing the physical parameters
+    :param source: :class:`PointData` object containing the source geometry
+    :param receiver: :class:`PointData` object containing the acquisition geometry
+    :param time_order: Time discretization order
+    :param space_order: Space discretization order
+    :param save : Saving flag, True saves all time steps, False only the three
+    """
+    m, damp = model.m, model.damp
+    dt = model.critical_dt
+
+    # Create symbols for forward wavefield, source and receivers
+    u = TimeData(name='u', shape=model.shape_domain, time_dim=source.nt,
+                 time_order=time_order, space_order=space_order, save=save,
+                 dtype=model.dtype)
+    dux = TimeData(name='dux', shape=model.shape_domain, time_dim=source.nt,
+                 time_order=time_order, space_order=space_order, save=save,
+                 dtype=model.dtype)
+    duy = TimeData(name='duy', shape=model.shape_domain, time_dim=source.nt,
+                 time_order=time_order, space_order=space_order, save=save,
+                 dtype=model.dtype)
+
+    src = PointSource(name='src', ntime=source.nt, ndim=source.ndim,
+                      npoint=source.npoint)
+    rec = Receiver(name='rec', ntime=receiver.nt, ndim=receiver.ndim,
+                   npoint=receiver.npoint)
+
+    # time derivative
+    equ = m * u.dt2 + damp*u.dt
+    eqdux = m * dux.dt2 + damp*dux.dt
+    eqduy = m * duy.dt2 + damp*duy.dt
+
+    stencilu = solve(equ, u.forward, rational=False)[0]
+    stencildux = solve(eqdux, dux.forward, rational=False)[0]
+    stencilduy = solve(eqduy, duy.forward, rational=False)[0]
+    # Laplacian, reuse stored derivatives
+    # d^2u/dx^2 = 2 u.dx2 - dux.dx
+    # and so on
+    a1 = - 2 * u.laplace + dux.dx + duy.dy
+    b1 = -dux.dx2 - second_derivative(u.dx, dim=y, order=u.space_order)
+    c1 = -duy.dy2 - second_derivative(u.dy, dim=x, order=u.space_order)
+    # Double laplacian
+    a1 += -s ** 2 / 12 * u.laplace2(weight=1 / m)
+    b1 += -s ** 2 / 12 * dux.laplace2(u.dx, 1 / m)
+    c1 += -s ** 2 / 12 * duy.laplace2(u.dy, 1 / m)
+    # solve
+    stencilu -= s**2/(m + s*damp) * a1
+    stencildux -= s**2/(m + s*damp) * b1
+    stencilduy -= s**2/(m + s*damp) * c1
+
+    stencil = [Eq(u.forward, stencilu), Eq(dux.forward, stencildux), Eq(duy.forward, stencilduy)]
+
+    # Construct expression to inject source values
+    # Note that src and field terms have differing time indices:
+    #   src[time, ...] - always accesses the "unrolled" time index
+    #   u[ti + 1, ...] - accesses the forward stencil value
+    ti = u.indices[0]
+    src_term = src.inject(field=u, u_t=ti + 1, offset=model.nbpml,
+                          expr=src * dt**2 / m, p_t=time)
+
+    # Create interpolation expression for receivers
+    rec_term = rec.interpolate(expr=u, u_t=ti, offset=model.nbpml)
+
+    subs = dict([(t.spacing, dt)] + [(time.spacing, dt)] +
+                [(i.spacing, model.get_spacing()[j]) for i, j
+                 in zip(u.indices[1:], range(len(model.shape)))])
+
+    return Operator(stencil + src_term + rec_term, dle='noop',
+                    subs=subs,
+                    time_axis=Forward, name='Forwardbug', **kwargs)
 
 
 def AdjointOperator(model, source, receiver, time_order=2, space_order=4, **kwargs):
