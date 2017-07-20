@@ -164,7 +164,7 @@ class AcousticWaveSolver(object):
             m = m or self.model.m
 
         # Execute operator and return wavefield and receiver data
-        summary = self.op_fwd_bug.apply(src=src, rec=rec, u=u, dux=dux, duy=duy, m=m, **kwargs)
+        summary = self.op_fwd_bug.apply(src=src, rec=rec, u=u, m=m, **kwargs)
         return rec, u, summary
 
     def adjoint(self, rec, srca=None, v=None, m=None, **kwargs):
