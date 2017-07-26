@@ -1,8 +1,11 @@
-import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-from matplotlib import cm
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+try:
+    import numpy as np
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    from matplotlib import cm
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+except ImportError:
+    pass
 
 mpl.rc('font', size=16)
 mpl.rc('figure', figsize=(8, 6))
