@@ -2,6 +2,11 @@ from pyrevolve import Checkpoint
 from operator import mul
 from functools import reduce
 from devito import TimeData
+import numpy as np
+from devito.exceptions import InvalidArgument
+
+def checkpoint_logger(msg):
+    print(msg)
 
 
 class DevitoCheckpoint(Checkpoint):
@@ -14,6 +19,7 @@ class DevitoCheckpoint(Checkpoint):
         assert(all(isinstance(s, TimeData) for s in symbols))
         self.dtype = symbols[0].dtype
         self.symbols = symbols
+        self.revolver = None
 
     def save(self, ptr):
         """Overwrite live-data in this Checkpoint object with data found at
@@ -22,6 +28,12 @@ class DevitoCheckpoint(Checkpoint):
         i_ptr_hi = 0
         for s in self.symbols:
             i_ptr_hi = i_ptr_hi + s.size
+            try:
+                element = (self.revolver.ckp.oldcapo + 2) % 3
+                checkpoint_logger("Save %s: %d"%(s.name, np.linalg.norm(s.data[element])))
+                checkpoint_logger("Oldcapo: %d, capo: %d" % (self.revolver.ckp.oldcapo, self.revolver.ckp.capo))
+            except Exception as e:
+                raise InvalidArgument("Unable to calculate L2 norm of %s: %s" % (s.name, str(e)))
             ptr[i_ptr_lo:i_ptr_hi] = s.data.flatten()[:]
             i_ptr_lo = i_ptr_hi
 
@@ -33,6 +45,8 @@ class DevitoCheckpoint(Checkpoint):
         for s in self.symbols:
             i_ptr_hi = i_ptr_hi + s.size
             s.data[:] = ptr[i_ptr_lo:i_ptr_hi].reshape(s.shape)
+            checkpoint_logger("Load %s: %d"%(s.name, np.linalg.norm(s.data)))
+            checkpoint_logger("Oldcapo: %d, capo: %d" % (self.revolver.ckp.oldcapo, self.revolver.ckp.capo))
             i_ptr_lo = i_ptr_hi
     
     @property

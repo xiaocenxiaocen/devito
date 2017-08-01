@@ -10,11 +10,11 @@ import sympy
 
 from devito.cgen_utils import Allocator, blankline
 from devito.compiler import jit_compile, load
-from devito.dimension import time, Dimension
+from devito.dimension import time, Dimension, t
 from devito.dle import compose_nodes, filter_iterations, transform
 from devito.dse import clusterize, indexify, rewrite, q_indexed
 from devito.interfaces import Forward, Backward, CompositeData, SymbolicData
-from devito.logger import bar, error, info
+from devito.logger import bar, error, debug
 from devito.nodes import Element, Expression, Function, Iteration, List, LocalExpression
 from devito.parameters import configuration
 from devito.profiling import Profiler, create_profile
@@ -491,7 +491,7 @@ class OperatorRunnable(Operator):
         with bar():
             for k, v in summary.items():
                 name = '%s<%s>' % (k, ','.join('%d' % i for i in v.itershape))
-                info("Section %s with OI=%.2f computed in %.3f s [Perf: %.2f GFlops/s]" %
+                debug("Section %s with OI=%.2f computed in %.3f s [Perf: %.2f GFlops/s]" %
                      (name, v.oi, v.time, v.gflopss))
 
         return summary

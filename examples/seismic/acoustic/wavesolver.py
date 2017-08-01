@@ -62,7 +62,7 @@ class AcousticWaveSolver(object):
     @property
     def op_grad(self):
         """Cached operator for gradient runs"""
-        return GradientOperator(self.model, save=False, source=self.source,
+        return GradientOperator(self.model, save=True, source=self.source,
                                 receiver=self.receiver, time_order=self.time_order,
                                 space_order=self.space_order, **self._kwargs)
 

@@ -67,9 +67,11 @@ def run(dimensions=(50, 50, 50), tn=750.0,
     src = PointSource(name="src", data=time_series, coordinates=location)
 
     # Receiver for true model
-    rec_t = Receiver(name="rec", ntime=nt, coordinates=receiver_coords)
+    rec_t = Receiver(name="rec_t", ntime=nt, coordinates=receiver_coords)
     # Receiver for smoothed model
-    rec_s = Receiver(name="rec", ntime=nt, coordinates=receiver_coords)
+    rec_s = Receiver(name="rec_s", ntime=nt, coordinates=receiver_coords)
+
+    # Try with save = True and plot the whole damn thing. Check if the source is causing something
 
     # Receiver for Gradient
     # Confusing nomenclature because this is actually the source for the adjoint
@@ -79,6 +81,8 @@ def run(dimensions=(50, 50, 50), tn=750.0,
                          # Create the forward wavefield to use (only 3 timesteps)
     # Once checkpointing is in, this will be the only wavefield we need
     u = TimeData(name="u", shape=model.shape_domain, time_order=time_order,
+                 space_order=space_order, save=False, dtype=model.dtype)
+    u1 = TimeData(name="u1", shape=model.shape_domain, time_order=time_order,
                  space_order=space_order, save=False, dtype=model.dtype)
 
     v = TimeData(name="v", shape=model.shape_domain, time_order=time_order,
@@ -110,7 +114,16 @@ def run(dimensions=(50, 50, 50), tn=750.0,
     # This is the pass that needs checkpointing <----
     # fw.apply(u=u, rec=rec_s, m=m0, src=src)
     u.data[:] = 0
+    print("Trial 1")
+    fw.apply(u=u1, rec=rec_s, m=m0, src=src)
+    print("src: %d, coords=%s" % (np.linalg.norm(src.data), src.coordinates.data))
+    print("u: %d, rec: %d" % (np.linalg.norm(u1.data), np.linalg.norm(rec_s.data)))
+    print(np.max(u.data))
+    rec_s.data[:] = 0
+    print("Trial 2")
     wrp.apply_forward()
+    print("u: %d, rec: %d" % (np.linalg.norm(u.data), np.linalg.norm(rec_s.data)))
+    #return
 
     # Objective function value
     F0 = .5*linalg.norm(rec_s.data - rec_t.data)**2
@@ -158,5 +171,5 @@ def run(dimensions=(50, 50, 50), tn=750.0,
 
 
 if __name__ == "__main__":
-    run(dimensions=(60, 70, 80), time_order=2, space_order=4, tn=9000)
+    run(dimensions=(60, 70), time_order=2, space_order=4, tn=750)
 

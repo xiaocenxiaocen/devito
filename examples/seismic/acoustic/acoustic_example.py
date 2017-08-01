@@ -91,12 +91,12 @@ def run(dimensions=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=1000.0,
         return summary.gflopss, summary.oi, summary.timings, [rec, u.data]
 
     info("Applying Adjoint")
-    solver.adjoint(rec, **kwargs)
+    #solver.adjoint(rec)
     info("Applying Born")
-    solver.born(dm, **kwargs)
+    #solver.born(dm)
     info("Applying Gradient")
-    solver.gradient(rec, u, **kwargs)
+    solver.gradient(rec, u)
 
 
 if __name__ == "__main__":
-    run(full_run=True, autotune=False, space_order=6, time_order=2)
+    run(full_run=True, autotune=False, space_order=6, time_order=2, dse='noop', dle='noop')
