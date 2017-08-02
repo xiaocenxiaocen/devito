@@ -150,7 +150,6 @@ class Operator(Function):
         """ Process any apply-time arguments passed to apply and derive values for
             any remaining arguments
         """
-        print(self.name)
         new_params = {}
         # If we've been passed CompositeData objects as kwargs, they might have children
         # that need to be substituted as well.
@@ -488,11 +487,6 @@ class OperatorRunnable(Operator):
 
         # Output summary of performance achieved
         summary = self.profiler.summary(dim_sizes, self.dtype)
-        with bar():
-            for k, v in summary.items():
-                name = '%s<%s>' % (k, ','.join('%d' % i for i in v.itershape))
-                debug("Section %s with OI=%.2f computed in %.3f s [Perf: %.2f GFlops/s]" %
-                     (name, v.oi, v.time, v.gflopss))
 
         return summary
 

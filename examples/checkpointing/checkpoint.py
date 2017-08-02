@@ -28,12 +28,7 @@ class DevitoCheckpoint(Checkpoint):
         i_ptr_hi = 0
         for s in self.symbols:
             i_ptr_hi = i_ptr_hi + s.size
-            try:
-                element = (self.revolver.ckp.oldcapo + 2) % 3
-                checkpoint_logger("Save %s: %d"%(s.name, np.linalg.norm(s.data[element])))
-                checkpoint_logger("Oldcapo: %d, capo: %d" % (self.revolver.ckp.oldcapo, self.revolver.ckp.capo))
-            except Exception as e:
-                raise InvalidArgument("Unable to calculate L2 norm of %s: %s" % (s.name, str(e)))
+            #checkpoint_logger("Oldcapo: %d, capo: %d" % (self.revolver.ckp.oldcapo, self.revolver.ckp.capo))
             ptr[i_ptr_lo:i_ptr_hi] = s.data.flatten()[:]
             i_ptr_lo = i_ptr_hi
 
@@ -45,7 +40,6 @@ class DevitoCheckpoint(Checkpoint):
         for s in self.symbols:
             i_ptr_hi = i_ptr_hi + s.size
             s.data[:] = ptr[i_ptr_lo:i_ptr_hi].reshape(s.shape)
-            checkpoint_logger("Load %s: %d"%(s.name, np.linalg.norm(s.data)))
             checkpoint_logger("Oldcapo: %d, capo: %d" % (self.revolver.ckp.oldcapo, self.revolver.ckp.capo))
             i_ptr_lo = i_ptr_hi
     

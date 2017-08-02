@@ -10,6 +10,7 @@ from cgen import Struct, Value
 from devito.dse import estimate_cost, estimate_memory
 from devito.nodes import Expression, TimedList
 from devito.visitors import IsPerfectIteration, FindSections, FindNodes, Transformer
+from devito.logger import DEBUG, bar, debug
 
 __all__ = ['Profile', 'create_profile']
 
@@ -164,6 +165,12 @@ class Profiler(object):
 
         # Rename the most time consuming section as 'main'
         summary['main'] = summary.pop(max(summary, key=summary.get))
+
+        with bar(DEBUG):
+            for k, v in summary.items():
+                name = '%s<%s>' % (k, ','.join('%d' % i for i in v.itershape))
+                debug("Section %s with OI=%.2f computed in %.3f s [Perf: %.2f GFlops/s]" %
+                     (name, v.oi, v.time, v.gflopss))
 
         return summary
 

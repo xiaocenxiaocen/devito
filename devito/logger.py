@@ -136,7 +136,7 @@ def dle_warning(msg, *args, **kwargs):
 
 
 @contextmanager
-def bar():
-    log('='*89, INFO)
+def bar(loglevel=INFO):
+    log('='*89, loglevel)
     yield
-    log('='*89, INFO)
+    log('='*89, loglevel)

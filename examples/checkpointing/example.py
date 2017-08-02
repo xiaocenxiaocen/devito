@@ -78,7 +78,7 @@ def run(dimensions=(50, 50, 50), tn=750.0,
     # mode
     rec_g = Receiver(name="rec", ntime=nt, coordinates=rec_s.coordinates.data)
 
-                         # Create the forward wavefield to use (only 3 timesteps)
+    # Create the forward wavefield to use (only 3 timesteps)
     # Once checkpointing is in, this will be the only wavefield we need
     u = TimeData(name="u", shape=model.shape_domain, time_order=time_order,
                  space_order=space_order, save=False, dtype=model.dtype)
@@ -113,17 +113,14 @@ def run(dimensions=(50, 50, 50), tn=750.0,
     # Smooth velocity
     # This is the pass that needs checkpointing <----
     # fw.apply(u=u, rec=rec_s, m=m0, src=src)
-    u.data[:] = 0
-    print("Trial 1")
+
     fw.apply(u=u1, rec=rec_s, m=m0, src=src)
-    print("src: %d, coords=%s" % (np.linalg.norm(src.data), src.coordinates.data))
-    print("u: %d, rec: %d" % (np.linalg.norm(u1.data), np.linalg.norm(rec_s.data)))
-    print(np.max(u.data))
+    rec_s_backup = np.copy(rec_s.data)
     rec_s.data[:] = 0
-    print("Trial 2")
+    u.data[:] = 0
     wrp.apply_forward()
-    print("u: %d, rec: %d" % (np.linalg.norm(u.data), np.linalg.norm(rec_s.data)))
-    #return
+    assert(np.allclose(u.data, u1.data))
+    assert(np.allclose(rec_s.data, rec_s_backup))
 
     # Objective function value
     F0 = .5*linalg.norm(rec_s.data - rec_t.data)**2
@@ -171,5 +168,5 @@ def run(dimensions=(50, 50, 50), tn=750.0,
 
 
 if __name__ == "__main__":
-    run(dimensions=(60, 70), time_order=2, space_order=4, tn=750)
+    run(dimensions=(60, 70), time_order=2, space_order=4)
 

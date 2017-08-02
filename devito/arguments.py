@@ -1,7 +1,7 @@
 import cgen as c
 import numpy as np
 from cached_property import cached_property
-from devito.logger import info
+from devito.logger import debug
 from sympy import Symbol
 from collections import Iterable
 from devito.exceptions import InvalidArgument
@@ -333,4 +333,4 @@ def log_args(arguments):
                 raise InvalidArgument("Unable to calculate L2 norm of %s: %s" % (k, str(e)))
         else:
             arg_str.append('(%s, value=%s)' % (k, str(v)))
-    info("Passing Arguments: " + ", ".join(arg_str))
+    debug("Passing Arguments: " + ", ".join(arg_str))
