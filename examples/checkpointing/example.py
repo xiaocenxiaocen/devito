@@ -24,11 +24,12 @@ def source(t, f0):
     return (1-2.*r**2)*np.exp(-r**2)
 
 
-def run(dimensions=(50, 50, 50), tn=750.0,
-        time_order=2, space_order=4, nbpml=40, dse='noop', dle='noop'):
+def run(dimensions=(50, 50, 50), tn=750.0, spacing=None, autotune=False, 
+        time_order=2, space_order=4, nbpml=40, maxmem=None, dse='noop', dle='noop'):
     ndim = len(dimensions)
     origin = tuple([0.] * ndim)
-    spacing = tuple([15.] * ndim)
+    if spacing is None:
+        spacing = tuple([15.] * ndim)
     f0 = .010
     t0 = 0.0
     # True velocity
@@ -105,7 +106,10 @@ def run(dimensions=(50, 50, 50), tn=750.0,
 
     ############################################################################
     cp = DevitoCheckpoint([u])
-    wrp = Revolver(cp, fw, gradop, nt)
+    n_checkpoints = None
+    if maxmem is not None:
+        n_checkpoints = math.floor(maxmem*10**9/cp.size)
+    wrp = Revolver(cp, fw, gradop, nt, n_checkpoints)
 
     wrp.fwd_args = {'u': u, 'rec': rec_s, 'm': m0, 'src': src}
     wrp.rev_args = {'u':u, 'v': v, 'm': m0, 'rec': rec_g,'grad':grad}

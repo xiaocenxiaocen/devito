@@ -1,1 +1,1 @@
-import checkpoint
+import examples.checkpointing.checkpoint
