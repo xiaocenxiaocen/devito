@@ -95,8 +95,8 @@ def run(dimensions=(50, 50, 50), tn=750.0,
     # This is the pass that needs checkpointing <----
     fw.apply(u=u_save, rec=rec_s, m=m0, src=src)
 
-    for ti in range(0, nt):
-        print("t=%d, L2(u(t))=%d" % (ti, np.linalg.norm(u_save.data[ti])))
+    #for ti in range(0, nt):
+    #    print("t=%d, L2(u(t))=%d" % (ti, np.linalg.norm(u_save.data[ti])))
 
     # Objective function value
     F0 = .5*linalg.norm(rec_s.data - rec_t.data)**2
