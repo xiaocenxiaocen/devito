@@ -108,7 +108,7 @@ def run(dimensions=(50, 50, 50), tn=750.0, spacing=None, autotune=False,
     cp = DevitoCheckpoint([u])
     n_checkpoints = None
     if maxmem is not None:
-        n_checkpoints = floor(maxmem*10**6/(2*cp.size*grad.data.itemsize))
+        n_checkpoints = int(floor(maxmem*10**6/(2*cp.size*grad.data.itemsize)))
         print("Checkpoints: %d * %d" % (n_checkpoints, cp.size))
     wrp = Revolver(cp, fw, gradop, nt, n_checkpoints)
 
