@@ -1,5 +1,8 @@
 from __future__ import absolute_import
 
+from collections import OrderedDict
+
+from ctypes import c_void_p
 from sympy import Indexed
 
 from devito.compiler import jit_compile
@@ -106,6 +109,15 @@ class Operator(OperatorRunnable):
         log("Specialization successfully performed!")
 
         return processed
+
+    def _extra_arguments(self):
+        return OrderedDict([(c_void_p, self.ksoln.rawpointer)])
+
+    @property
+    def _cparameters(self):
+        cparameters = super(Operator, self)._cparameters
+        cparameters += [c.Pointer(c.Value(c_void_p, 'soln'))]
+        return cparameters
 
     def apply(self, **kwargs):
         # Build the arguments list to invoke the kernel function
