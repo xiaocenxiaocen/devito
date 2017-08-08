@@ -1,4 +1,4 @@
-from pyrevolve import Checkpoint
+from pyrevolve import Checkpoint, Operator
 from operator import mul
 from functools import reduce
 from devito import TimeData
@@ -8,6 +8,18 @@ from devito.exceptions import InvalidArgument
 def checkpoint_logger(msg):
     print(msg)
 
+class DevitoOperator(object):
+    def __init__(self, op, args, argnames, offsets):
+        self.op = op
+        self.args = args
+        self.argnames = argnames
+        self.offsets = offsets
+
+    def apply(self, t_start, t_end):
+        args = self.args.copy()
+        args[self.argnames['t_start']] = t_start + self.offsets[0]
+        args[self.argnames['t_end']] = t_end + self.offsets[1]
+        self.op.apply(**args)
 
 class DevitoCheckpoint(Checkpoint):
     """Holds a list of symbol objects that hold data."""
@@ -40,7 +52,7 @@ class DevitoCheckpoint(Checkpoint):
         for s in self.symbols:
             i_ptr_hi = i_ptr_hi + s.size
             s.data[:] = ptr[i_ptr_lo:i_ptr_hi].reshape(s.shape)
-            checkpoint_logger("Oldcapo: %d, capo: %d" % (self.revolver.ckp.oldcapo, self.revolver.ckp.capo))
+            #checkpoint_logger("Oldcapo: %d, capo: %d" % (self.revolver.ckp.oldcapo, self.revolver.ckp.capo))
             i_ptr_lo = i_ptr_hi
     
     @property

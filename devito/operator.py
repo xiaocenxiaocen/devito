@@ -275,10 +275,8 @@ class Operator(Function):
         if self._lib is None:
             # No need to recompile if a shared object has already been loaded.
             name = jit_compile(self.ccode, configuration['compiler'])
-            print(self.name+":"+name)
             return name
         else:
-            print(self.name+":"+self._lib.name)
             return self._lib.name
 
     @property

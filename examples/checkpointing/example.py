@@ -4,7 +4,7 @@ from math import floor
 from devito import TimeData, DenseData
 from examples.seismic import Model, PointSource, Receiver
 from examples.seismic.acoustic import ForwardOperator, GradientOperator
-from examples.checkpointing.checkpoint import DevitoCheckpoint
+from examples.checkpointing.checkpoint import DevitoCheckpoint, DevitoOperator
 from pyrevolve import Revolver
 
 
@@ -25,7 +25,7 @@ def source(t, f0):
 
 
 def run(dimensions=(50, 50, 50), tn=750.0, spacing=None, autotune=False, 
-        time_order=2, space_order=4, nbpml=40, maxmem=None, dse='noop', dle='noop'):
+        time_order=2, space_order=4, nbpml=40, maxmem=None, dse='basic', dle='basic'):
     ndim = len(dimensions)
     origin = tuple([0.] * ndim)
     if spacing is None:
@@ -110,10 +110,10 @@ def run(dimensions=(50, 50, 50), tn=750.0, spacing=None, autotune=False,
     if maxmem is not None:
         n_checkpoints = int(floor(maxmem*10**6/(2*cp.size*grad.data.itemsize)))
         print("Checkpoints: %d * %d" % (n_checkpoints, cp.size))
-    wrp = Revolver(cp, fw, gradop, nt, n_checkpoints)
-
-    wrp.fwd_args = {'u': u, 'rec': rec_s, 'm': m0, 'src': src}
-    wrp.rev_args = {'u':u, 'v': v, 'm': m0, 'rec': rec_g,'grad':grad}
+    print("Timesteps: %d"%nt)
+    wrap_fw = DevitoOperator(fw, {'u': u, 'rec': rec_s, 'm': m0, 'src': src}, {'t_start': 't_s', 't_end': 't_e'}, [0, 2])
+    wrap_rev = DevitoOperator(gradop, {'u':u, 'v': v, 'm': m0, 'rec': rec_g,'grad':grad}, {'t_start': 't_s', 't_end': 't_e'}, [0, 2, 1])
+    wrp = Revolver(cp, wrap_fw, wrap_rev, nt-2, n_checkpoints)
     
     # Smooth velocity
     # This is the pass that needs checkpointing <----
@@ -124,8 +124,8 @@ def run(dimensions=(50, 50, 50), tn=750.0, spacing=None, autotune=False,
     rec_s.data[:] = 0
     u.data[:] = 0
     wrp.apply_forward()
-    #assert(np.allclose(u.data, u1.data))
-    #assert(np.allclose(rec_s.data, rec_s_backup))
+    assert(np.allclose(u.data, u1.data))
+    assert(np.allclose(rec_s.data, rec_s_backup))
 
     # Objective function value
     F0 = .5*linalg.norm(rec_s.data - rec_t.data)**2
@@ -141,7 +141,7 @@ def run(dimensions=(50, 50, 50), tn=750.0, spacing=None, autotune=False,
     
     # The result is in grad
     gradient = grad.data
-
+    print(np.linalg.norm(gradient))
     # <J^T \delta d, dm>
     G = np.dot(gradient.reshape(-1), dm.reshape(-1))
     # FWI Gradient test
@@ -154,6 +154,7 @@ def run(dimensions=(50, 50, 50), tn=750.0, spacing=None, autotune=False,
         mloc = m0 + H[i] * dm
         # Set field to zero (we're re-using it)
         u.data.fill(0)
+        rec_s.data.fill(0)
         # Receiver data for the new model
         # Results will be in rec_s
         fw.apply(u=u, rec=rec_s, m=mloc, src=src)
@@ -168,8 +169,8 @@ def run(dimensions=(50, 50, 50), tn=750.0, spacing=None, autotune=False,
     p2 = np.polyfit(np.log10(H), np.log10(error2), 1)
     print(p1)
     print(p2)
-    #assert np.isclose(p1[0], 1.0, rtol=0.1)
-    #assert np.isclose(p2[0], 2.0, rtol=0.1)
+    assert np.isclose(p1[0], 1.0, rtol=0.1)
+    assert np.isclose(p2[0], 2.0, rtol=0.1)
 
 
 if __name__ == "__main__":
