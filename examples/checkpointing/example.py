@@ -25,7 +25,7 @@ def source(t, f0):
 
 
 def run(dimensions=(50, 50, 50), tn=750.0, spacing=None, autotune=False, 
-        time_order=2, space_order=4, nbpml=40, maxmem=None, dse='basic', dle='advanced'):
+        time_order=2, space_order=4, nbpml=40, maxmem=None, dse='advanced', dle='advanced'):
     ndim = len(dimensions)
     origin = tuple([0.] * ndim)
     if spacing is None:
