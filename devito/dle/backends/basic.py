@@ -60,23 +60,21 @@ class BasicRewriter(AbstractRewriter):
                     continue
 
                 name = "f_%d" % len(functions)
-                print(name)
                 # Heuristic: create elemental functions only if more than
                 # self.thresholds['elemental_functions'] operations are present
                 expressions = FindNodes(Expression).visit(root)
                 ops = estimate_cost([e.expr for e in expressions])
                 if ops < self.thresholds['elemental'] and not root.is_Elementizable:
                     continue
-                pprint(root)
                 # Determine the arguments required by the elemental function
                 in_scope = [i.dim for i in tree[tree.index(root):]]
-                print(in_scope)
+
                 required = FindSymbols(mode='free-symbols').visit(root)
-                print(required)
+
                 for i in FindSymbols('symbolics').visit(root):
                     required.extend(flatten(j.rtargs for j in i.indices))
                 required = set([as_symbol(i) for i in required if i not in in_scope])
-                print(required)
+
                 # Add tensor arguments
                 args = []
                 seen = {e.output for e in expressions if e.is_scalar}
@@ -89,7 +87,7 @@ class BasicRewriter(AbstractRewriter):
                     seen |= {as_symbol(i)}
                 # Add scalar arguments
                 handle = filter_sorted(required - seen, key=attrgetter('name'))
-                print(handle)
+
                 args.extend([(i.name, ScalarFunction(name=i.name, dtype=np.int32))
                              for i in handle])
                 # Track info to transform the main tree
@@ -97,7 +95,7 @@ class BasicRewriter(AbstractRewriter):
                 mapper[view] = (List(header=noinline, body=FunCall(name, call)), [root])
 
                 args = flatten([p.rtargs for p in parameters])
-                print("****")
+
                 # Produce the new function
                 functions.append(Function(name, root, 'void', args, ('static',)))
 

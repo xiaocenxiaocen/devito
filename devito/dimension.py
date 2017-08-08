@@ -59,7 +59,8 @@ class OpenDimension(Symbol, DimensionArgProvider):
     @property
     def symbolic_size(self):
         """The symbolic size of this dimension."""
-        return Symbol(self.ccode)
+        start, end = self.rtargs
+        return Symbol(end.name) - Symbol(start.name)
 
     @property
     def size(self):
