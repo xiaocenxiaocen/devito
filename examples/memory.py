@@ -25,12 +25,14 @@ def plot_results(results):
     plt.title("Checkpointing - timing vs peak memory consumption")
     plt.xlabel("Peak memory consumption (MB)")
     plt.ylabel("Total runtime (s)")
+    plt.ylim(ymin=0)
+    plt.xlim(xmin=0) 
     plt.savefig("foo.png", bbox_inches='tight')
     
 
-dimensions = (20, 20, 20)
+dimensions = (60, 60, 60)
 
-maxmem = [250, 500, 750, 1000, 1250, 1500]
+maxmem = [500, 750, 1000, 1250, 1500]
 
 results = []
 # Gradient Run

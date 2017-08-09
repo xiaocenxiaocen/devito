@@ -23,7 +23,7 @@ def source(t, f0):
 
 
 def run(dimensions=(50, 50, 50), tn=750.0,
-        time_order=2, space_order=4, nbpml=40, dse='noop', dle='noop'):
+        time_order=2, space_order=4, nbpml=40, dse='advanced', dle='advanced'):
     ndim = len(dimensions)
     origin = tuple([0.] * ndim)
     spacing = tuple([15.] * ndim)

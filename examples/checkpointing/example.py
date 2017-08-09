@@ -141,7 +141,7 @@ def run(dimensions=(50, 50, 50), tn=750.0, spacing=None, autotune=False,
     
     # The result is in grad
     gradient = grad.data
-    print(np.linalg.norm(gradient))
+
     # <J^T \delta d, dm>
     G = np.dot(gradient.reshape(-1), dm.reshape(-1))
     # FWI Gradient test
@@ -174,5 +174,5 @@ def run(dimensions=(50, 50, 50), tn=750.0, spacing=None, autotune=False,
 
 
 if __name__ == "__main__":
-    run(dimensions=(60, 70), time_order=2, space_order=4)
+    run(dimensions=(60, 70, 80), time_order=2, space_order=4)
 
