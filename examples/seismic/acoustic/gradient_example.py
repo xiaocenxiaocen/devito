@@ -22,11 +22,12 @@ def source(t, f0):
     return (1-2.*r**2)*np.exp(-r**2)
 
 
-def run(dimensions=(50, 50, 50), tn=750.0,
+def run(dimensions=(50, 50, 50), tn=750.0, spacing=None, 
         time_order=2, space_order=4, nbpml=40, dse='advanced', dle='advanced'):
     ndim = len(dimensions)
     origin = tuple([0.] * ndim)
-    spacing = tuple([15.] * ndim)
+    if spacing is None:
+        spacing = tuple([15.] * ndim)
     f0 = .010
     t0 = 0.0
     # True velocity

@@ -108,7 +108,7 @@ def run(dimensions=(50, 50, 50), tn=750.0, spacing=None, autotune=False,
     cp = DevitoCheckpoint([u])
     n_checkpoints = None
     if maxmem is not None:
-        n_checkpoints = int(floor(maxmem*10**6/(2*cp.size*grad.data.itemsize)))
+        n_checkpoints = int(floor(maxmem*10**6/(cp.size*grad.data.itemsize)))
         print("Checkpoints: %d * %d" % (n_checkpoints, cp.size))
     print("Timesteps: %d"%nt)
     wrap_fw = DevitoOperator(fw, {'u': u, 'rec': rec_s, 'm': m0, 'src': src}, {'t_start': 't_s', 't_end': 't_e'}, [0, 2])

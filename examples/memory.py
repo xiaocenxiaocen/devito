@@ -21,34 +21,36 @@ def time_and_memory_profile(fun_call, num_tries=3):
     # Units: (MB, Sec)
     return maxmem, timing
 
-def plot_results(results):
+def plot_results(results, reference):
     x, y = zip(*results)
     plt.plot(x, y)
     plt.title("Checkpointing - timing vs peak memory consumption")
     plt.xlabel("Peak memory consumption (MB)")
     plt.ylabel("Total runtime (s)")
     plt.ylim(ymin=0, ymax=max(y)*1.1)
-    plt.xlim(xmin=0, xmax=max(x)*1.1) 
-    plt.savefig("foo.png", bbox_inches='tight')
+    plt.xlim(xmin=0, xmax=max(x)*1.1)
+    plt.hlines(reference[1], 0, max(x)*1.1, 'r', 'dashed')
+    plt.vlines(reference[0], 0, max(y)*1.1, 'r', 'dashed')
+    plt.savefig("results.png", bbox_inches='tight')
     
 
-dimensions = (60, 60, 60)
-
-maxmem = [1000, 1250, 1500, 2000, 2500]
+dimensions = (450, 450, 450)
+spacing = (75, 75, 75)
+maxmem = [2500, 5000, 10000, 20000, 40000, 80000 ]
 
 results = []
 # Gradient Run
 # results.append(time_and_memory_profile((gradient_run, (dimensions, ))))
 
 for mm in maxmem:
-    results.append(time_and_memory_profile((cp_run, (dimensions, ), {'maxmem': mm})))
+    results.append(time_and_memory_profile((cp_run, (dimensions, ), {'maxmem': mm, 'spacing': spacing})))
 
 print(results)
 
-plot_results(results)
-
 print("Full memory run now")
 
-print(time_and_memory_profile((gradient_run, (dimensions, ))))
+full_run = time_and_memory_profile((gradient_run, (dimensions, ), {'spacing': spacing}))
+print(full_run)
 
+plot_results(results, full_run)
 
