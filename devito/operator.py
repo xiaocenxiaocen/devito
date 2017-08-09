@@ -120,12 +120,12 @@ class Operator(Function):
         dims = [i for i in parameters if isinstance(i, Dimension)]
         d_parents = [d.parent for d in dims if hasattr(d, 'parent')]
 
-        self.dims = list(set(dims + d_parents))
+        self.dims = filter_ordered(dims + d_parents)
 
         assert(all(isinstance(i, ArgumentProvider) for i in self.symbolic_data +
                    self.dims))
 
-        parameters = list(set(parameters + d_parents))
+        parameters = filter_ordered(parameters + d_parents)
 
         # Translate into backend-specific representation (e.g., GPU, Yask)
         nodes, elemental_functions = self._specialize(nodes, elemental_functions)
