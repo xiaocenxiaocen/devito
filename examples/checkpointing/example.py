@@ -47,6 +47,7 @@ def run(dimensions=(50, 50, 50), tn=750.0, spacing=None, autotune=False,
         dt *= 1.73
 
     nt = int(1+(tn-t0)/dt)
+    print("Timesteps: %d"%nt)
 
     # Source geometry
     time_series = np.zeros((nt, 1), dtype=np.float32)
