@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 from checkpointing.example import run as cp_run
 from seismic.acoustic.gradient_example import run as gradient_run
 from memory_profiler import memory_usage
