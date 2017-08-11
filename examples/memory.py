@@ -37,7 +37,7 @@ def plot_results(results, reference):
 
 dimensions = (230, 230, 230)
 spacing = (10, 10, 10)
-maxmem = [100, 200]
+maxmem = [1000, 2000, 4000, 8000, 16000, 32000, 64000]
 
 ex_cp = CheckpointedGradientExample(dimensions, spacing=spacing)
 ex_full = FullGradientExample(dimensions, spacing=spacing)
@@ -56,19 +56,17 @@ ex_full.do_verify(grad_full)
 print("Verify for cp")
 ex_cp.do_verify(grad_cp)
 
-results = []
-# Gradient Run
-# results.append(time_and_memory_profile((gradient_run, (dimensions, ))))
-
-for mm in maxmem:
-    results.append(time_and_memory_profile((CheckpointedGradientExample.do_gradient, (ex_cp, mm))))
-
-print(results)
-
 print("Full memory run now")
 
 full_run = time_and_memory_profile((FullGradientExample.do_gradient, (ex_full, )))
 print(full_run)
+
+
+results = []
+for mm in maxmem:
+    results.append(time_and_memory_profile((CheckpointedGradientExample.do_gradient, (ex_cp, mm))))
+
+print(results)
 
 plot_results(results, full_run)
 
