@@ -1,12 +1,13 @@
 import matplotlib
 matplotlib.use('Agg')
-from checkpointing.example import run as cp_run
-from seismic.acoustic.gradient_example import run as gradient_run
+from checkpointing.example import CheckpointedGradientExample
+from seismic.acoustic.gradient_example import FullGradientExample
 from memory_profiler import memory_usage
 from time import time
 import sys
 import gc
 import matplotlib.pyplot as plt
+import numpy as np
 
 def time_and_memory_profile(fun_call, num_tries=3):
     maxmem = 0
@@ -34,22 +35,39 @@ def plot_results(results, reference):
     plt.savefig("results.png", bbox_inches='tight')
     
 
-dimensions = (450, 450, 450)
-spacing = (75, 75, 75)
-maxmem = [2500, 5000, 10000, 20000, 40000, 80000 ]
+dimensions = (230, 230, 230)
+spacing = (10, 10, 10)
+maxmem = [100, 200]
+
+ex_cp = CheckpointedGradientExample(dimensions, spacing=spacing)
+ex_full = FullGradientExample(dimensions, spacing=spacing)
+
+print("Calculate gradient from full")
+grad_full = ex_full.do_gradient()
+
+print("Calculate gradient from cp")
+grad_cp = ex_cp.do_gradient(None)
+
+assert(np.array_equal(grad_full, grad_cp))
+
+print("Verify for full")
+ex_full.do_verify(grad_full)
+
+print("Verify for cp")
+ex_cp.do_verify(grad_cp)
 
 results = []
 # Gradient Run
 # results.append(time_and_memory_profile((gradient_run, (dimensions, ))))
 
 for mm in maxmem:
-    results.append(time_and_memory_profile((cp_run, (dimensions, ), {'maxmem': mm, 'spacing': spacing})))
+    results.append(time_and_memory_profile((CheckpointedGradientExample.do_gradient, (ex_cp, mm))))
 
 print(results)
 
 print("Full memory run now")
 
-full_run = time_and_memory_profile((gradient_run, (dimensions, ), {'spacing': spacing}))
+full_run = time_and_memory_profile((FullGradientExample.do_gradient, (ex_full, )))
 print(full_run)
 
 plot_results(results, full_run)
