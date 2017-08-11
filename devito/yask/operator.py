@@ -110,15 +110,6 @@ class Operator(OperatorRunnable):
 
         return processed
 
-    def _extra_arguments(self):
-        return OrderedDict([(c_void_p, self.ksoln.rawpointer)])
-
-    @property
-    def _cparameters(self):
-        cparameters = super(Operator, self)._cparameters
-        cparameters += [c.Pointer(c.Value(c_void_p, 'soln'))]
-        return cparameters
-
     def apply(self, **kwargs):
         # Build the arguments list to invoke the kernel function
         arguments, dim_sizes = self.arguments(**kwargs)
