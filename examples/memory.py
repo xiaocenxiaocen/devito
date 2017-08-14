@@ -40,33 +40,31 @@ spacing = (10, 10, 10)
 maxmem = [1000, 2000, 4000, 8000, 16000, 32000, 64000]
 
 ex_cp = CheckpointedGradientExample(dimensions, spacing=spacing)
-ex_full = FullGradientExample(dimensions, spacing=spacing)
-
-print("Calculate gradient from full")
-grad_full = ex_full.do_gradient()
 
 print("Calculate gradient from cp")
 grad_cp = ex_cp.do_gradient(None)
 
-assert(np.array_equal(grad_full, grad_cp))
-
-print("Verify for full")
-ex_full.do_verify(grad_full)
-
 print("Verify for cp")
 ex_cp.do_verify(grad_cp)
 
+results = []
+for mm in maxmem:
+    results.append(time_and_memory_profile((CheckpointedGradientExample.do_gradient, (ex_cp, mm))))
+    
+print(results)
+
+ex_full = FullGradientExample(dimensions, spacing=spacing)
+
+print("Calculate gradient from full")
 print("Full memory run now")
 
 full_run = time_and_memory_profile((FullGradientExample.do_gradient, (ex_full, )))
 print(full_run)
 
+assert(np.array_equal(grad_full, grad_cp))
 
-results = []
-for mm in maxmem:
-    results.append(time_and_memory_profile((CheckpointedGradientExample.do_gradient, (ex_cp, mm))))
-
-print(results)
+print("Verify for full")
+ex_full.do_verify(grad_full)
 
 plot_results(results, full_run)
 
