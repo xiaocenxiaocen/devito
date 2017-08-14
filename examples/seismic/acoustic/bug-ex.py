@@ -1,94 +1,171 @@
 import numpy as np
+from sympy import Eq, exp
 
-from devito.logger import info
-from examples.seismic.acoustic import AcousticWaveSolver
-from examples.seismic import Model, PointSource, Receiver
-
-
-# Velocity models
-def smooth10(vel, shape):
-    out = np.ones(shape, dtype=np.float32)
-    out[:] = vel[:]
-    nz = shape[-1]
-
-    for a in range(5, nz-6):
-        if len(shape) == 2:
-            out[:, a] = np.sum(vel[:, a - 5:a + 5], axis=1) / 10
-        else:
-            out[:, :, a] = np.sum(vel[:, :, a - 5:a + 5], axis=2) / 10
-
-    return out
+from devito import DenseData, Dimension, TimeData, t, time, Operator, x, y, z
+from examples.seismic import PointSource
 
 
-# Set up the source as Ricker wavelet for f0
-def source(t, f0):
-    r = (np.pi * f0 * (t - 1./f0))
+# NoneType bug at initialization as dimensions size are not know from u
 
-    return (1-2.*r**2)*np.exp(-r**2)
+def bug_dimension(dimensions=(50, 50, 50), spacing=(15.0, 15.0, 15.0)):
 
+    dt = 1.2
+    nt = 100
+    u = TimeData(name="u", shape=dimensions, dtype=np.float32, save=False,
+                 space_order=4, time_order=2)
 
-def setup(dimensions=(50, 50, 50), spacing=(15.0, 15.0, 15.0), tn=500.,
-          time_order=2, space_order=4, nbpml=10, **kwargs):
-
-    ndim = len(dimensions)
-    origin = tuple([0.]*ndim)
-    spacing = spacing[:ndim]
-    # Velocity model, two layers
-    true_vp = np.ones(dimensions) + .5
-    true_vp[..., int(dimensions[-1] / 3):dimensions[-1]] = 2.5
+    p_truc = Dimension(name="ptruc", size=10)
     # Source location
-    location = np.zeros((1, ndim), dtype=np.float32)
-    location[0, :-1] = [origin[i] + dimensions[i] * spacing[i] * .5
-                        for i in range(ndim-1)]
-    location[0, -1] = origin[-1] + 2 * spacing[-1]
-    # Receivers locations
-    receiver_coords = np.zeros((dimensions[0], ndim), dtype=np.float32)
-    receiver_coords[:, 0] = np.linspace(0, origin[0] +
-                                        (dimensions[0]-1) * spacing[0],
-                                        num=dimensions[0])
-    receiver_coords[:, 1:] = location[0, 1:]
+    location = np.zeros((1, 3), dtype=np.float32)
+    location[0, :-1] = [dimensions[i] * spacing[i] * .5
+                        for i in range(3 - 1)]
+    location[0, -1] = 2 * spacing[-1]
 
-    # Define seismic data
-    model = Model(origin, spacing, dimensions, true_vp, nbpml=int(nbpml))
+    time_series = np.zeros((nt, 1))
 
-    f0 = .010
-    dt = model.critical_dt
-    if time_order == 4:
-        dt *= 1.73
-    t0 = 0.0
-    tn = tn
-    nt = int(1+(tn-t0)/dt)
-
-    # Set up the source as Ricker wavelet for f0
-    def source(t, f0):
-        r = (np.pi * f0 * (t - 1./f0))
-        return (1-2.*r**2)*np.exp(-r**2)
-
-    # Source geometry
-    time_series = np.zeros((nt, 1), dtype=np.float32)
-    time_series[:, 0] = source(np.linspace(t0, tn, nt), f0)
-
-    # Define source and receivers and create acoustic wave solver
+    time_series[:, 0] = np.ones((nt,))
     src = PointSource(name='src', data=time_series, coordinates=location)
-    rec = Receiver(name='rec', ntime=nt, coordinates=receiver_coords)
-    return AcousticWaveSolver(model, source=src, receiver=rec,
-                              time_order=time_order, space_order=space_order,
-                              **kwargs)
+
+    dense = DenseData(name="a", dimensions=(p_truc,) + u.indices[1:])
+    truc = DenseData(name="tr", dimensions=(p_truc,))
+    truc.data[:] = 10.
+
+    stencil1 = [Eq(u.forward, u.laplace)]
+
+    stencil2 = [Eq(dense, time * truc * dense + u)]
+
+    subs = dict([(t.spacing, dt)] + [(time.spacing, dt)] +
+                [(i.spacing, spacing[j]) for i, j
+                 in zip(u.indices[1:], range(len(dimensions)))])
+
+    op = Operator(stencil2 + src.inject(u, u) + stencil1, subs=subs)
+
+    op.cfunction
 
 
-def run(dimensions=(50, 50), spacing=(20.0, 20.0), tn=1000.0,
-        time_order=2, space_order=4, nbpml=40, **kwargs):
+# This one has two split time loops
 
-    solver = setup(dimensions=dimensions, spacing=spacing, nbpml=nbpml, tn=tn,
-                   space_order=space_order, time_order=time_order,
-                   dse='advanced', dle='advanced', **kwargs)
+def bug_dimension2(dimensions=(50, 50, 50), spacing=(15.0, 15.0, 15.0)):
+    dt = 1.2
+    nt = 100
+    u = TimeData(name="u", shape=dimensions, dtype=np.float32, save=False,
+                 space_order=4, time_order=2, nt=100)
 
-    info("Applying Forward")
-    rec, u, summary = solver.forward_bug()
+    p_truc = Dimension(name="ptruc", size=10)
 
 
-    return summary.gflopss, summary.oi, summary.timings, [rec, u.data]
+    # Source location
+    location = np.zeros((1, 3), dtype=np.float32)
+    location[0, :-1] = [dimensions[i] * spacing[i] * .5
+                        for i in range(3-1)]
+    location[0, -1] = 2 * spacing[-1]
 
+    time_series = np.zeros((nt, 1))
+
+    time_series[:, 0] = np.ones((nt, ))
+    src = PointSource(name='src', data=time_series, coordinates=location)
+    # Avoid dimension bug
+    x.size=dimensions[0]
+    y.size = dimensions[1]
+    z.size = dimensions[2]
+    time.size = 100
+
+    dense = DenseData(name="a", dimensions=(p_truc,) + u.indices[1:])
+    truc = DenseData(name="tr", dimensions=(p_truc,))
+    truc.data[:] = 10.
+
+    stencil1 = [Eq(u.forward, u.laplace)]
+
+    stencil2 = [Eq(dense, time*truc*dense + u)]
+
+    subs = dict([(t.spacing, dt)] + [(time.spacing, dt)] +
+                [(i.spacing, spacing[j]) for i, j
+                 in zip(u.indices[1:], range(len(dimensions)))])
+
+    op = Operator(stencil2 + src.inject(u, u) + stencil1, subs=subs)
+
+    op.cfunction
+
+
+# This one is good
+def NObug_dimension3(dimensions=(500, 500, 500), spacing=(15.0, 15.0, 15.0)):
+    dt = 1.2
+    nt = 100
+    u = TimeData(name="u", shape=dimensions, dtype=np.float32, save=False,
+                 space_order=4, time_order=2, nt=100)
+
+    p_truc = Dimension(name="ptruc", size=10)
+
+    # Source location
+    location = np.zeros((1, 3), dtype=np.float32)
+    location[0, :-1] = [dimensions[i] * spacing[i] * .5
+                        for i in range(3 - 1)]
+    location[0, -1] = 2 * spacing[-1]
+
+    time_series = np.zeros((nt, 1))
+
+    time_series[:, 0] = np.ones((nt,))
+    src = PointSource(name='src', data=time_series, coordinates=location)
+    # Avoid dimension bug
+    x.size = dimensions[0]
+    y.size = dimensions[1]
+    z.size = dimensions[2]
+    time.size = 100
+
+    dense = DenseData(name="a", dimensions=u.indices[1:] + (p_truc,))
+    truc = DenseData(name="tr", dimensions=(p_truc,))
+    truc.data[:] = 10.
+
+    stencil1 = [Eq(u.forward, u.laplace)]
+
+    stencil2 = [Eq(dense, time * truc * dense + u)]
+
+    subs = dict([(t.spacing, dt)] + [(time.spacing, dt)] +
+                [(i.spacing, spacing[j]) for i, j
+                 in zip(u.indices[1:], range(len(dimensions)))])
+
+    op = Operator(stencil1 + src.inject(u, u) + stencil2, subs=subs)
+
+    op.cfunction
+
+
+def bug_dimension4(dimensions=(500, 500), spacing=(15.0, 15.0)):
+    dt = 1.2
+    nt = 100
+    u = TimeData(name="u", shape=dimensions, dtype=np.float32, save=False,
+                 space_order=4, time_order=2, nt=100)
+
+    p_truc = Dimension(name="ptruc", size=10)
+
+    x.size = dimensions[0]
+    y.size = dimensions[1]
+
+    # Source location
+    location = np.zeros((1, 3), dtype=np.float32)
+    location[0, :-1] = [dimensions[i] * spacing[i] * .5
+                        for i in range(3 - 1)]
+    location[0, -1] = 2 * spacing[-1]
+
+    time_series = np.zeros((nt, 1))
+
+    time_series[:, 0] = np.ones((nt,))
+    src = PointSource(name='src', data=time_series, coordinates=location)
+
+    dense = DenseData(name="a", dimensions=u.indices[1:] + (p_truc,))
+    truc = DenseData(name="tr", dimensions=(p_truc,))
+    truc.data[:] = 10.
+
+    stencil1 = [Eq(u.forward, u.laplace)]
+
+    stencil2 = [Eq(dense,  dense + exp(time)*u)]
+
+    subs = dict([(t.spacing, dt)] + [(time.spacing, dt)] +
+                [(i.spacing, spacing[j]) for i, j
+                 in zip(u.indices[1:], range(len(dimensions)))])
+
+    op = Operator(stencil2 + src.inject(u, u) + stencil1, subs=subs)
+
+    op.cfunction
 
 if __name__ == "__main__":
-    run(autotune=False, space_order=6, time_order=2, dimensions=(50, 50))
+    bug_dimension4()
