@@ -8,19 +8,35 @@ import sys
 import gc
 import matplotlib.pyplot as plt
 import numpy as np
+import multiprocessing as mp
+from multiprocessing import Process, Queue
 
-def time_and_memory_profile(fun_call, num_tries=3):
-    maxmem = 0
-    timing = sys.maxsize
+def profile(fun_call, q):
+    start_time = time()
+    memory, retval = memory_usage(fun_call, max_usage=True, retval=True)
+    end_time = time()
+    runtime = end_time - start_time
+    q.put(((memory[0], runtime), retval))
+    
+def fork_and_profile(fun_call):
+    q = mp.Queue()
+    p = Process(target=profile, args=(fun_call, q))
+    p.start()
+    usage = q.get()
+    p.join()
+    return usage
+
+
+def repeated_profile(fun_call, num_tries=3):
+    best_usage = None
+    retval = None
     for trial in range(num_tries):
-        start_time = time()
-        memory = memory_usage(fun_call)
-        end_time = time()
-        timing = min(timing, (end_time-start_time))
-        maxmem = max(max(memory), maxmem)
-        gc.collect()
+        usage, retval = fork_and_profile(fun_call)
+        if best_usage is None or usage[1] < best_usage[1]:
+            best_usage = usage
     # Units: (MB, Sec)
-    return maxmem, timing
+    return best_usage, retval
+
 
 def plot_results(results, reference):
     x, y = zip(*results)
@@ -49,7 +65,7 @@ ex_cp.do_verify(grad_cp)
 
 results = []
 for mm in maxmem:
-    results.append(time_and_memory_profile((CheckpointedGradientExample.do_gradient, (ex_cp, mm))))
+    results.append(repeated_profile((CheckpointedGradientExample.do_gradient, (ex_cp, mm)))[0])
     
 print(results)
 
@@ -58,13 +74,10 @@ ex_full = FullGradientExample(dimensions, spacing=spacing)
 print("Calculate gradient from full")
 print("Full memory run now")
 
-full_run = time_and_memory_profile((FullGradientExample.do_gradient, (ex_full, )))
+full_run, grad_full = repeated_profile((FullGradientExample.do_gradient, (ex_full, )))
 print(full_run)
 
 assert(np.array_equal(grad_full, grad_cp))
-
-print("Verify for full")
-ex_full.do_verify(grad_full)
 
 plot_results(results, full_run)
 
