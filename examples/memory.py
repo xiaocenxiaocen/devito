@@ -44,14 +44,16 @@ def plot_results(results, reference):
     plt.title("Checkpointing - timing vs peak memory consumption")
     plt.xlabel("Peak memory consumption (MB)")
     plt.ylabel("Total runtime (s)")
-    plt.ylim(ymin=0, ymax=max(y)*1.1)
-    plt.xlim(xmin=0, xmax=max(x)*1.1)
-    plt.hlines(reference[1], 0, max(x)*1.1, 'r', 'dashed')
-    plt.vlines(reference[0], 0, max(y)*1.1, 'r', 'dashed')
-    plt.savefig("results.png", bbox_inches='tight')
+    xmax = max(max(x), reference[0])*1.1
+    ymax = max(max(y), reference[1])*1.1
+    plt.ylim(ymin=0, ymax=ymax)
+    plt.xlim(xmin=0, xmax=xmax)
+    plt.hlines(reference[1], 0, xmax, 'r', 'dashed')
+    plt.vlines(reference[0], 0, ymax, 'r', 'dashed')
+    plt.savefig("results170.png", bbox_inches='tight')
     
 
-dimensions = (230, 230, 230)
+dimensions = (170, 170, 170)
 spacing = (10, 10, 10)
 maxmem = [1000, 2000, 4000, 8000, 16000, 32000, 64000]
 
