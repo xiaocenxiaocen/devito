@@ -50,12 +50,12 @@ def plot_results(results, reference):
     plt.xlim(xmin=0, xmax=xmax)
     plt.hlines(reference[1], 0, xmax, 'r', 'dashed')
     plt.vlines(reference[0], 0, ymax, 'r', 'dashed')
-    plt.savefig("results170.png", bbox_inches='tight')
+    plt.savefig("results180.png", bbox_inches='tight')
     
 
-dimensions = (170, 170, 170)
+dimensions = (180, 180, 180)
 spacing = (10, 10, 10)
-maxmem = [1000, 2000, 4000, 8000, 16000, 32000, 64000]
+maxmem = [1000, 2000, 4000, 8000, 16000, 32000, 48000, 64000]
 
 ex_cp = CheckpointedGradientExample(dimensions, spacing=spacing)
 
