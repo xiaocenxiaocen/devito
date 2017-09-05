@@ -8,12 +8,13 @@ import resource
 
 from devito.logger import info, info_at
 from devito.nodes import Iteration
+from devito.parameters import configuration
 from devito.visitors import FindNodes, FindSymbols
 
 __all__ = ['autotune']
 
 
-def autotune(operator, arguments, tunable, mode='basic'):
+def autotune(operator, arguments, tunable):
     """
     Acting as a high-order function, take as input an operator and a list of
     operator arguments to perform empirical autotuning. Some of the operator
@@ -30,14 +31,14 @@ def autotune(operator, arguments, tunable, mode='basic'):
     # Squeeze dimensions to minimize auto-tuning time
     iterations = FindNodes(Iteration).visit(operator.body)
     dim_mapper = {i.dim.name: i.dim for i in iterations}
-    squeezable = [i.dim.parent.name for i in iterations
+    squeezable = [i.dim.parent.symbolic_size.name for i in iterations
                   if i.is_Sequential and i.dim.is_Buffered]
 
     # Attempted block sizes
-    mapper = OrderedDict([(i.argument.name, i) for i in tunable])
+    mapper = OrderedDict([(i.argument.symbolic_size.name, i) for i in tunable])
     blocksizes = [OrderedDict([(i, v) for i in mapper])
                   for v in options['at_blocksize']]
-    if mode == 'aggressive':
+    if configuration['autotuning'] == 'aggressive':
         blocksizes = more_heuristic_attempts(blocksizes)
 
     # How many temporaries are allocated on the stack?
@@ -55,7 +56,7 @@ def autotune(operator, arguments, tunable, mode='basic'):
         for k, v in at_arguments.items():
             if k in bs:
                 val = bs[k]
-                handle = at_arguments.get(mapper[k].original_dim.name)
+                handle = at_arguments.get(mapper[k].original_dim.symbolic_size.name)
                 if val <= mapper[k].iteration.end(handle):
                     at_arguments[k] = val
                 else:
@@ -86,8 +87,8 @@ def autotune(operator, arguments, tunable, mode='basic'):
             info_at("Couldn't determine stack size, skipping block size %s" % str(bs))
             continue
 
-        # Add profiler structs
-        at_arguments.update(operator._extra_arguments())
+        # Use AT-specific profiler structs
+        at_arguments[operator.profiler.structname] = operator.profiler.setup()
 
         operator.cfunction(*list(at_arguments.values()))
         elapsed = sum(operator.profiler.timings.values())
@@ -105,6 +106,9 @@ def autotune(operator, arguments, tunable, mode='basic'):
     tuned = OrderedDict()
     for k, v in arguments.items():
         tuned[k] = best[k] if k in mapper else v
+
+    # Reset the profiling struct
+    tuned[operator.profiler.structname] = operator.profiler.setup()
 
     return tuned
 

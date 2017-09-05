@@ -1,20 +1,27 @@
 import weakref
+import abc
 
 import numpy as np
-from sympy import Function, IndexedBase, Symbol, as_finite_diff, symbols
+import sympy
+from sympy import Function, IndexedBase, as_finite_diff
 from sympy.abc import s
 
-from devito.dimension import t, x, y, z, time
+from devito.dimension import t, x, y, z, time, Dimension
 from devito.finite_difference import (centered, cross_derivative,
                                       first_derivative, left, right,
                                       second_derivative)
 from devito.logger import debug, error, warning
 from devito.memory import CMemory, first_touch
-from devito.arguments import (SymbolicDataArgProvider, ScalarFunctionArgProvider,
-                              TensorFunctionArgProvider)
+from devito.arguments import (ConstantDataArgProvider, TensorDataArgProvider,
+                              ScalarFunctionArgProvider, TensorFunctionArgProvider,
+                              ObjectArgProvider)
+from devito.parameters import configuration
 
-__all__ = ['DenseData', 'TimeData', 'Forward', 'Backward']
+__all__ = ['Symbol', 'Indexed',
+           'ConstantData', 'DenseData', 'TimeData',
+           'Forward', 'Backward']
 
+configuration.add('first_touch', 0, [0, 1], lambda i: bool(i))
 
 # This cache stores a reference to each created data object
 # so that we may re-create equivalent symbols during symbolic
@@ -44,7 +51,56 @@ Forward = TimeAxis('Forward')
 Backward = TimeAxis('Backward')
 
 
-class CachedSymbol(object):
+class Basic(object):
+    """
+    Base class for API objects, used to build and run :class:`Operator`s.
+
+    There are two main types of objects: symbolic and generic. Symbolic objects
+    may carry data, and are used to build equations. Generic objects may be
+    used to represent or pass arbitrary data structures. The following diagram
+    outlines the top of this hierarchy.
+
+                                 Basic
+                                   |
+                    ----------------------------------
+                    |                                |
+              CachedSymbol                         Object
+                    |                       <see Object.__doc__>
+             AbstractSymbol
+    <see diagram in AbstractSymbol.__doc__>
+
+    All derived :class:`Basic` objects may be emitted through code generation
+    to create a just-in-time compilable kernel.
+    """
+
+    # Top hierarchy
+    is_AbstractSymbol = False
+    is_Object = False
+
+    # Symbolic objects created internally by Devito
+    is_SymbolicFunction = False
+    is_ScalarFunction = False
+    is_TensorFunction = False
+
+    # Symbolic objects created by user
+    is_SymbolicData = False
+    is_ConstantData = False
+    is_TensorData = False
+    is_DenseData = False
+    is_TimeData = False
+    is_CompositeData = False
+    is_PointData = False
+
+    # Basic symbolic object properties
+    is_Scalar = False
+    is_Tensor = False
+
+    @abc.abstractmethod
+    def __init__(self, *args, **kwargs):
+        return
+
+
+class CachedSymbol(Basic):
     """Base class for symbolic objects that caches on the class type."""
 
     @classmethod
@@ -94,17 +150,32 @@ class AbstractSymbol(Function, CachedSymbol):
     Note: The parameters :param name: and :param shape: must always be
     present and given as keyword arguments, since SymPy uses `*args`
     to (re-)create the dimension arguments of the symbolic function.
+
+    This class is the root of the Devito data objects hierarchy, which
+    is structured as follows.
+
+                             AbstractSymbol
+                                   |
+                 -------------------------------------
+                 |                                   |
+          SymbolicFunction                      SymbolicData
+                 |                                   |
+          ------------------                 ------------------
+          |                |                 |                |
+    ScalarFunction  TensorFunction     ConstantData           |
+                                                              |
+                                                ----------------------------
+                                                |             |            |
+                                            DenseData      TimeData  CompositeData
+                                                                           |
+                                                                       PointData
+
+    The key difference between a :class:`SymbolicData` and a :class:`SymbolicFunction`
+    is that the former is created directly by the user and employed in some
+    computation, while the latter is created and managed internally by Devito.
     """
 
     is_AbstractSymbol = True
-    is_SymbolicFunction = False
-    is_SymbolicData = False
-    is_ScalarFunction = False
-    is_TensorFunction = False
-    is_DenseData = False
-    is_TimeData = False
-    is_CompositeData = False
-    is_PointData = False
 
     def __new__(cls, *args, **kwargs):
         if cls in _SymbolCache:
@@ -182,15 +253,17 @@ class AbstractSymbol(Function, CachedSymbol):
         in a C module, False otherwise."""
         return False
 
-    def indexify(self):
+    def indexify(self, indices=None):
         """Create a :class:`sympy.Indexed` object from the current object."""
+        if indices is not None:
+            return Indexed(self.indexed, *indices)
+
         subs = dict([(i.spacing, 1) for i in self.indices])
         indices = [a.subs(subs) for a in self.args]
-
         if indices:
-            return self.indexed[indices]
+            return Indexed(self.indexed, *indices)
         else:
-            return EmptyIndexed(self.indexed)
+            return Symbol(self.indexed)
 
 
 class SymbolicFunction(AbstractSymbol):
@@ -220,6 +293,7 @@ class ScalarFunction(SymbolicFunction, ScalarFunctionArgProvider):
     """
 
     is_ScalarFunction = True
+    is_Scalar = True
 
     def __init__(self, *args, **kwargs):
         if not self._cached():
@@ -249,6 +323,7 @@ class TensorFunction(SymbolicFunction, TensorFunctionArgProvider):
     """
 
     is_TensorFunction = True
+    is_Tensor = True
 
     def __init__(self, *args, **kwargs):
         if not self._cached():
@@ -277,17 +352,72 @@ class TensorFunction(SymbolicFunction, TensorFunctionArgProvider):
         self._onstack = onstack or self._mem_stack
 
 
-class SymbolicData(AbstractSymbol, SymbolicDataArgProvider):
-    """A symbolic object associated with data."""
+class SymbolicData(AbstractSymbol):
+    """A symbolic object associated with data.
+
+    Unlike :class:`SymbolicFunction` objects, the structure of a SymbolicData
+    is immutable (e.g., shape, dtype, ...). Obviously, the object value (``data``)
+    may be altered, either directly by the user or by an :class:`Operator`.
+    """
 
     is_SymbolicData = True
 
     @property
+    def _data_buffer(self):
+        """Reference to the actual data. This is *not* a view of the data.
+        This method is for internal use only."""
+        return self.data
+
+    @abc.abstractproperty
+    def data(self):
+        """The value of the data object."""
+        return
+
+
+class ConstantData(SymbolicData, ConstantDataArgProvider):
+
+    """
+    Data object for constant values.
+    """
+
+    is_ConstantData = True
+    is_Scalar = True
+
+    def __new__(cls, *args, **kwargs):
+        kwargs.update({'options': {'evaluate': False}})
+        return AbstractSymbol.__new__(cls, *args, **kwargs)
+
+    def __init__(self, *args, **kwargs):
+        if not self._cached():
+            self.name = kwargs.get('name')
+            self.shape = ()
+            self.indices = ()
+            self.dtype = kwargs.get('dtype', np.float32)
+            self._value = kwargs.get('value', 0.)
+
+    @property
+    def data(self):
+        """The value of the data object, as a scalar (int, float, ...)."""
+        return self._value
+
+    @data.setter
+    def data(self, val):
+        self._value = val
+
+
+class TensorData(SymbolicData, TensorDataArgProvider):
+
+    is_TensorData = True
+    is_Tensor = True
+
+    @property
     def _mem_external(self):
+        """Return True if the associated data was/is/will be allocated directly
+        from Python (e.g., via NumPy arrays), False otherwise."""
         return True
 
 
-class DenseData(SymbolicData):
+class DenseData(TensorData):
     """Data object for spatially varying data acting as a :class:`SymbolicData`.
 
     :param name: Name of the symbol
@@ -319,7 +449,7 @@ class DenseData(SymbolicData):
             self.initializer = kwargs.get('initializer', None)
             if self.initializer is not None:
                 assert(callable(self.initializer))
-            self.numa = kwargs.get('numa', False)
+            self._first_touch = kwargs.get('first_touch', configuration['first_touch'])
             self._data_object = None
 
     @classmethod
@@ -344,27 +474,24 @@ class DenseData(SymbolicData):
             if len(shape) <= 3:
                 dimensions = _indices[:len(shape)]
             else:
-                dimensions = [symbols("x%d" % i) for i in range(1, len(shape) + 1)]
+                dimensions = [Dimension("x%d" % i) for i in range(1, len(shape) + 1)]
         return dimensions
 
     def _allocate_memory(self):
         """Allocate memory in terms of numpy ndarrays."""
         debug("Allocating memory for %s (%s)" % (self.name, str(self.shape)))
         self._data_object = CMemory(self.shape, dtype=self.dtype)
-        if self.numa:
+        if self._first_touch:
             first_touch(self)
         else:
             self.data.fill(0)
 
     @property
     def data(self):
-        """Reference to the :class:`numpy.ndarray` containing the data
-
-        :returns: The ndarray containing the data
-        """
+        """The value of the data object, as a :class:`numpy.ndarray` storing
+        elements in the classical row-major storage layout."""
         if self._data_object is None:
             self._allocate_memory()
-
         return self._data_object.ndpointer
 
     def initialize(self):
@@ -498,19 +625,18 @@ class DenseData(SymbolicData):
     @property
     def laplace(self):
         """Symbol for the second derivative wrt all spatial dimensions"""
-        derivs = ['dx2', 'dy2', 'dz2']
 
-        return sum([getattr(self, d) for d in derivs[:self.dim]])
+        return sum([getattr(self, 'd%s2' % d) for d in self.indices if d in (x, y, z)])
 
     def laplace2(self, field=None, weight=1):
         """Symbol for the double laplacian wrt all spatial dimensions"""
         order = self.space_order/2
         first = sum([second_derivative(field or self, dim=d,
                                        order=order)
-                     for d in self.indices[1:]])
+                     for d in self.indices if d in (x, y, z)])
         second = sum([second_derivative(first * weight, dim=d,
                                         order=order)
-                      for d in self.indices[1:]])
+                      for d in self.indices if d in (x, y, z)])
         return second
 
 
@@ -618,7 +744,7 @@ class TimeData(DenseData):
     @property
     def dt(self):
         """Symbol for the first derivative wrt the time dimension"""
-        _t = self.indices[0]
+        _t = [var for var in self.indices if var in (t, time)][0]
         if self.time_order == 1:
             # This hack is needed for the first-order diffusion test
             indices = [_t, _t + s]
@@ -631,40 +757,11 @@ class TimeData(DenseData):
     @property
     def dt2(self):
         """Symbol for the second derivative wrt the t dimension"""
-        _t = self.indices[0]
+        _t = [var for var in self.indices if var in (t, time)][0]
         width_t = int(self.time_order / 2)
         indt = [(_t + i * s) for i in range(-width_t, width_t + 1)]
 
         return as_finite_diff(self.diff(_t, _t), indt)
-
-
-class IndexedData(IndexedBase):
-    """Wrapper class that inserts a pointer to the symbolic data object"""
-
-    def __new__(cls, label, shape=None, function=None):
-        obj = IndexedBase.__new__(cls, label, shape)
-        obj.function = function
-        return obj
-
-    def func(self, *args):
-        obj = super(IndexedData, self).func(*args)
-        obj.function = self.function
-        return obj
-
-
-class EmptyIndexed(Symbol):
-
-    """A :class:`sympy.Symbol` capable of mimicking an :class:`sympy.Indexed`"""
-
-    def __new__(cls, base):
-        obj = Symbol.__new__(cls, base.label.name)
-        obj.base = base
-        obj.indices = ()
-        obj.function = base.function
-        return obj
-
-    def func(self, *args):
-        return super(EmptyIndexed, self).func(self.base.func(*self.base.args))
 
 
 class CompositeData(DenseData):
@@ -681,3 +778,71 @@ class CompositeData(DenseData):
     @property
     def children(self):
         return self._children
+
+
+# Objects belonging to the Devito API not involving data, such as data structures
+# that need to be passed to external libraries
+
+
+class Object(ObjectArgProvider):
+
+    """
+    Represent a generic pointer object.
+    """
+
+    is_Object = True
+
+    def __init__(self, name, dtype, value=None):
+        self.name = name
+        self.dtype = dtype
+        self.value = value
+
+    def __repr__(self):
+        return self.name
+
+
+# Extended SymPy hierarchy follows, for essentially two reasons:
+# - To keep track of `function`
+# - To override SymPy caching behaviour
+
+
+class IndexedData(IndexedBase):
+    """Wrapper class that inserts a pointer to the symbolic data object"""
+
+    def __new__(cls, label, shape=None, function=None):
+        obj = IndexedBase.__new__(cls, label, shape)
+        obj.function = function
+        return obj
+
+    def func(self, *args):
+        obj = super(IndexedData, self).func(*args)
+        obj.function = self.function
+        return obj
+
+    def __getitem__(self, indices, **kwargs):
+        """
+        Return :class:`Indexed`, rather than :class:`sympy.Indexed`.
+        """
+        indexed = super(IndexedData, self).__getitem__(indices, **kwargs)
+        return Indexed(*indexed.args)
+
+
+class Symbol(sympy.Symbol):
+
+    """A :class:`sympy.Symbol` capable of mimicking an :class:`sympy.Indexed`"""
+
+    def __new__(cls, base):
+        obj = sympy.Symbol.__new__(cls, base.label.name)
+        obj.base = base
+        obj.indices = ()
+        obj.function = base.function
+        return obj
+
+    def func(self, *args):
+        return super(Symbol, self).func(self.base.func(*self.base.args))
+
+
+class Indexed(sympy.Indexed):
+
+    def _hashable_content(self):
+        return super(Indexed, self)._hashable_content() + (self.base.function,)

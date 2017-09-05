@@ -1,8 +1,10 @@
-import cgen as c
+import abc
+
 import numpy as np
+from sympy import Symbol
 from cached_property import cached_property
 
-from devito.cgen_utils import ccode
+from devito.exceptions import InvalidArgument
 from devito.logger import debug
 
 """ This module provides a set of classes that help in processing runtime arguments for
@@ -24,8 +26,11 @@ class Argument(object):
         generated kernels.
     """
 
+    __metaclass__ = abc.ABCMeta
+
     is_ScalarArgument = False
     is_TensorArgument = False
+    is_PtrArgument = False
 
     def __init__(self, name, provider, default_value=None):
         self.name = name
@@ -34,25 +39,32 @@ class Argument(object):
 
     @property
     def value(self):
-        return self._value
+        try:
+            if self._value.is_SymbolicData:
+                return self._value._data_buffer
+            else:
+                raise InvalidArgument("Unexpected data object %s" % type(self._value))
+        except AttributeError:
+            return self._value
+
+    @property
+    def as_symbol(self):
+        return Symbol(self.name)
 
     @property
     def ready(self):
         return self._value is not None
 
     @property
-    def decl(self):
-        raise NotImplemented()
-
-    @property
-    def ccode(self):
-        return self.name
+    def dtype(self):
+        return self.provider.dtype
 
     def reset(self):
         self._value = self._default_value
 
+    @abc.abstractproperty
     def verify(self, kwargs):
-        raise NotImplemented()
+        return
 
 
 class ScalarArgument(Argument):
@@ -66,14 +78,6 @@ class ScalarArgument(Argument):
     def __init__(self, name, provider, reducer, default_value=None):
         super(ScalarArgument, self).__init__(name, provider, default_value)
         self.reducer = reducer
-
-    @property
-    def decl(self):
-        return c.Value('const int', self.name)
-
-    @property
-    def dtype(self):
-        return np.int32
 
     def verify(self, value):
         # Assuming self._value was initialised as appropriate for the reducer
@@ -93,32 +97,8 @@ class TensorArgument(Argument):
 
     is_TensorArgument = True
 
-    def __init__(self, name, provider, dtype):
-        super(TensorArgument, self).__init__(name, provider)
-        self.dtype = dtype
-        self._value = self._default_value = self.provider
-
-    @property
-    def value(self):
-        if isinstance(self._value, np.ndarray):
-            return self._value
-        else:
-            return self._value.data
-
-    @property
-    def decl(self):
-        return c.Value(c.dtype_to_ctype(self.dtype), '*restrict %s_vec' % self.name)
-
-    @property
-    def ccast(self):
-        alignment = "__attribute__((aligned(64)))"
-        shape = ''.join(["[%s]" % ccode(i) for i in self.provider.symbolic_shape[1:]])
-
-        cast = c.Initializer(c.POD(self.dtype,
-                                   '(*restrict %s)%s %s' % (self.name, shape, alignment)),
-                             '(%s (*)%s) %s' % (c.dtype_to_ctype(self.dtype),
-                                                shape, '%s_vec' % self.name))
-        return cast
+    def __init__(self, name, provider):
+        super(TensorArgument, self).__init__(name, provider, provider)
 
     def verify(self, value):
         if value is None:
@@ -132,6 +112,22 @@ class TensorArgument(Argument):
             self._value = value
 
         return self._value is not None and verify
+
+
+class PtrArgument(Argument):
+
+    """ Class representing arbitrary arguments that a kernel might expect.
+        These are passed as void pointers and then promptly casted to their
+        actual type.
+    """
+
+    is_PtrArgument = True
+
+    def __init__(self, name, provider):
+        super(PtrArgument, self).__init__(name, provider, provider.value)
+
+    def verify(self, value):
+        return True
 
 
 class ArgumentProvider(object):
@@ -186,14 +182,6 @@ class DimensionArgProvider(ArgumentProvider):
             return [size]
 
     @property
-    def ccode(self):
-        """C-level variable name of this dimension"""
-        if self.size is not None:
-            return "%d" % self.size
-        else:
-            return self.rtargs[0].ccode
-
-    @property
     def decl(self):
         return self.rtargs[0].decl
 
@@ -235,7 +223,18 @@ class DimensionArgProvider(ArgumentProvider):
         return verify
 
 
-class SymbolicDataArgProvider(ArgumentProvider):
+class ConstantDataArgProvider(ArgumentProvider):
+
+    """ Class used to decorate Constat Data objects with behaviour required for runtime
+        arguments.
+    """
+
+    @cached_property
+    def rtargs(self):
+        return [ScalarArgument(self.name, self, lambda old, new: new, self.data)]
+
+
+class TensorDataArgProvider(ArgumentProvider):
 
     """ Class used to decorate Symbolic Data objects with behaviour required for runtime
         arguments.
@@ -243,7 +242,7 @@ class SymbolicDataArgProvider(ArgumentProvider):
 
     @cached_property
     def rtargs(self):
-        return [TensorArgument(self.name, self, self.dtype)]
+        return [TensorArgument(self.name, self)]
 
 
 class ScalarFunctionArgProvider(ArgumentProvider):
@@ -265,7 +264,17 @@ class TensorFunctionArgProvider(ArgumentProvider):
 
     @cached_property
     def rtargs(self):
-        return [TensorArgument(self.name, self, self.dtype)]
+        return [TensorArgument(self.name, self)]
+
+
+class ObjectArgProvider(ArgumentProvider):
+
+    """ Class used to decorate Objects with behaviour required for runtime arguments.
+    """
+
+    @cached_property
+    def rtargs(self):
+        return [PtrArgument(self.name, self)]
 
 
 def log_args(arguments):
@@ -273,7 +282,7 @@ def log_args(arguments):
     for k, v in arguments.items():
         if hasattr(v, 'shape'):
             arg_str.append('(%s, shape=%s, L2 Norm=%d)' %
-                           (k, str(v.shape), np.linalg.norm(v)))
+                           (k, str(v.shape), np.linalg.norm(v.view())))
         else:
             arg_str.append('(%s, value=%s)' % (k, str(v)))
     debug("Passing Arguments: " + ", ".join(arg_str))

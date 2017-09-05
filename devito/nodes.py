@@ -6,14 +6,14 @@ import inspect
 from collections import Iterable, OrderedDict
 
 import cgen as c
-from sympy import Eq, preorder_traversal
+from sympy import Eq
 
 from devito.cgen_utils import ccode
-from devito.dse import as_symbol
-from devito.interfaces import IndexedData, SymbolicData, TensorFunction
+from devito.dse import as_symbol, terminals
+from devito.interfaces import Indexed, Symbol
 from devito.stencil import Stencil
 from devito.tools import as_tuple, filter_ordered, flatten
-from devito.arguments import ArgumentProvider, Argument, TensorArgument
+from devito.arguments import ArgumentProvider, Argument
 
 __all__ = ['Node', 'Block', 'Denormals', 'Expression', 'Function', 'FunCall',
            'Iteration', 'List', 'LocalExpression', 'TimedList']
@@ -56,8 +56,16 @@ class Node(object):
 
     @property
     def ccode(self):
-        """Generate C code."""
-        raise NotImplementedError()
+        """Generate C code.
+
+        This is a shorthand for
+
+            .. code-block::
+              from devito.visitors import CGen
+              CGen().visit(self)
+        """
+        from devito.visitors import CGen
+        return CGen().visit(self)
 
     @property
     def view(self):
@@ -87,8 +95,6 @@ class Block(Node):
 
     is_Block = True
 
-    _wrapper = c.Block
-
     _traversable = ['body']
 
     def __init__(self, header=None, body=None, footer=None):
@@ -101,11 +107,6 @@ class Block(Node):
                                       len(self.body), len(self.footer))
 
     @property
-    def ccode(self):
-        body = tuple(s.ccode for s in self.body)
-        return c.Module(self.header + (self._wrapper(body),) + self.footer)
-
-    @property
     def children(self):
         return (self.body,)
 
@@ -115,8 +116,6 @@ class List(Block):
     """Class representing a sequence of one or more statements."""
 
     is_List = True
-
-    _wrapper = c.Collection
 
 
 class Element(Node):
@@ -136,10 +135,6 @@ class Element(Node):
     def __repr__(self):
         return "Element::\n\t%s" % (self.element)
 
-    @property
-    def ccode(self):
-        return self.element
-
 
 class FunCall(Node):
 
@@ -147,16 +142,12 @@ class FunCall(Node):
 
     is_FunCall = True
 
-    def __init__(self, name, params):
+    def __init__(self, name, params=None):
         self.name = name
-        self.params = params
+        self.params = as_tuple(params)
 
     def __repr__(self):
         return "FunCall::\n\t%s(...)" % self.name
-
-    @property
-    def ccode(self):
-        return c.Statement('%s(%s)' % (self.name, ','.join(self.params)))
 
 
 class Expression(Node):
@@ -170,19 +161,14 @@ class Expression(Node):
         self.expr = expr
         self.dtype = dtype
 
-        self.dimensions = []
-        self.functions = []
         # Traverse /expression/ to determine meta information
-        for e in preorder_traversal(self.expr):
-            if isinstance(e, SymbolicData):
-                self.dimensions += list(e.indices)
-                self.functions += [e]
-            if isinstance(e, IndexedData):
-                self.dimensions += list(e.function.indices)
-                self.functions += [e.function]
+        # Note: at this point, expressions have already been indexified
+        self.functions = [i.base.function for i in terminals(self.expr)
+                          if isinstance(i, (Indexed, Symbol))]
+        self.dimensions = flatten(i.indices for i in self.functions)
         # Filter collected dimensions and functions
-        self.dimensions = filter_ordered(self.dimensions)
         self.functions = filter_ordered(self.functions)
+        self.dimensions = filter_ordered(self.dimensions)
 
     def __repr__(self):
         return "<%s::%s>" % (self.__class__.__name__,
@@ -195,10 +181,6 @@ class Expression(Node):
                               the stored expression.
         """
         self.expr = self.expr.xreplace(substitutions)
-
-    @property
-    def ccode(self):
-        return c.Assign(ccode(self.expr.lhs), ccode(self.expr.rhs))
 
     @property
     def output(self):
@@ -326,60 +308,6 @@ class Iteration(Node):
         return "<%sIteration %s; %s>" % (properties, index, self.limits)
 
     @property
-    def ccode(self):
-        """Generate C code for the represented stencil loop
-
-        :returns: :class:`cgen.For` object representing the loop
-        """
-        loop_body = [s.ccode for s in self.nodes]
-
-        # Start
-        if self.offsets[0] != 0:
-            start = "%s + %s" % (self.limits[0], -self.offsets[0])
-            try:
-                start = eval(start)
-            except (NameError, TypeError):
-                pass
-        else:
-            start = self.limits[0]
-
-        # Bound
-        if self.offsets[1] != 0:
-            end = "%s - %s" % (self.limits[1], self.offsets[1])
-            try:
-                end = eval(end)
-            except (NameError, TypeError):
-                pass
-        else:
-            end = self.limits[1]
-
-        # For reverse dimensions flip loop bounds
-        if self.reverse:
-            loop_init = 'int %s = %s' % (self.index, ccode('%s - 1' % end))
-            loop_cond = '%s >= %s' % (self.index, ccode(start))
-            loop_inc = '%s -= %s' % (self.index, self.limits[2])
-        else:
-            loop_init = 'int %s = %s' % (self.index, ccode(start))
-            loop_cond = '%s < %s' % (self.index, ccode(end))
-            loop_inc = '%s += %s' % (self.index, self.limits[2])
-
-        # Append unbounded indices, if any
-        if self.uindices:
-            uinit = ['%s = %s' % (i.index, ccode(i.start)) for i in self.uindices]
-            loop_init = c.Line(', '.join([loop_init] + uinit))
-            ustep = ['%s = %s' % (i.index, ccode(i.step)) for i in self.uindices]
-            loop_inc = c.Line(', '.join([loop_inc] + ustep))
-
-        # Create For header+body
-        handle = c.For(loop_init, loop_cond, loop_inc, c.Block(loop_body))
-
-        # Attach pragmas, if any
-        if self.pragmas:
-            handle = c.Module(self.pragmas + (handle,))
-
-        return handle
-
-    @property
     def is_Open(self):
         return self.dim.size is None
 
@@ -447,22 +375,43 @@ class Iteration(Node):
             pass
         return (start - as_symbol(self.offsets[0]), end - as_symbol(self.offsets[1]))
 
+    @property
+    def extent_symbolic(self):
+        """
+        Return the symbolic extent of the Iteration.
+        """
+        return self.bounds_symbolic[1] - self.bounds_symbolic[0]
+
+    @property
+    def start_symbolic(self):
+        """
+        Return the symbolic extent of the Iteration.
+        """
+        return self.bounds_symbolic[0]
+
+    @property
+    def end_symbolic(self):
+        """
+        Return the symbolic extent of the Iteration.
+        """
+        return self.bounds_symbolic[1]
+
     def bounds(self, start=None, finish=None):
         """Return the start and end points of the Iteration if the limits are
         available (either statically known or provided through ``start``/
         ``finish``). ``None`` is used as a placeholder in the returned 2-tuple
         if a limit is unknown."""
         try:
-            start = int(self.limits[0]) - self.offsets[0]
+            lower = int(self.limits[0]) - self.offsets[0]
         except (TypeError, ValueError):
-            if not start:
-                start = None
+            if isinstance(start, int):
+                lower = start - self.offsets[0]
         try:
-            finish = int(self.limits[1]) - self.offsets[1]
+            upper = int(self.limits[1]) - self.offsets[1]
         except (TypeError, ValueError):
-            if not finish:
-                finish = None
-        return (start, finish)
+            if isinstance(finish, int):
+                upper = finish - self.offsets[1]
+        return (lower, upper)
 
     def extent(self, start=None, finish=None):
         """Return the number of iterations executed if the limits are known,
@@ -518,44 +467,12 @@ class Function(Node):
         else:
             assert(all(isinstance(i, Argument) for i in parameters))
             args = parameters
-
         self.parameters = as_tuple(args)
-
-        # At this point, all objects in args should be objects of the RuntimeArgument
-        # heirarchy. Separate the tensor arguments from the scalar ones
-        self.tensor_args = [i for i in args if i.is_TensorArgument]
-        self.scalar_args = [i for i in args if i.is_ScalarArgument]
 
     def __repr__(self):
         parameters = ",".join([c.dtype_to_ctype(i.dtype) for i in self.parameters])
         body = "\n\t".join([str(s) for s in self.body])
         return "Function[%s]<%s; %s>::\n\t%s" % (self.name, self.retval, parameters, body)
-
-    @property
-    def _cparameters(self):
-        """Generate arguments signature."""
-        return [v.decl for v in self.parameters]
-
-    @property
-    def _ccasts(self):
-        """Generate data casts."""
-        tensors = [i for i in self.parameters
-                   if isinstance(i, (TensorArgument, TensorFunction))]
-        return [v.ccast for v in tensors]
-
-    @property
-    def _ctop(self):
-        """Generate the function declaration."""
-        return c.FunctionDeclaration(c.Value(self.retval, self.name), self._cparameters)
-
-    @property
-    def ccode(self):
-        """Generate C code for the represented C routine.
-
-        :returns: :class:`cgen.FunctionDeclaration` object representing the function.
-        """
-        body = [e.ccode for e in self.body]
-        return c.FunctionBody(self._ctop, c.Block(self._ccasts + body))
 
     @property
     def children(self):
@@ -620,11 +537,6 @@ class LocalExpression(Expression):
     def __init__(self, expr, dtype):
         super(LocalExpression, self).__init__(expr)
         self.dtype = dtype
-
-    @property
-    def ccode(self):
-        ctype = c.dtype_to_ctype(self.dtype)
-        return c.Initializer(c.Value(ctype, ccode(self.expr.lhs)), ccode(self.expr.rhs))
 
 
 # Iteration utilities

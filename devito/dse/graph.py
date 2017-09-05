@@ -25,7 +25,7 @@ from itertools import islice
 from cached_property import cached_property
 from sympy import Indexed
 
-from devito.dimension import x, y, z, t, time
+from devito.dimension import Dimension, x, y, z, t, time
 from devito.dse.extended_sympy import Eq
 from devito.dse.search import retrieve_indexed
 from devito.dse.inspection import as_symbol, terminals
@@ -148,9 +148,12 @@ class TemporariesGraph(OrderedDict):
         # Determine the indices along the time dimension
         self.time_indices = [t, time]
 
-    def trace(self, key):
+    def trace(self, key, readby=False, strict=False):
         """
         Return the sequence of operations required to compute the temporary ``key``.
+        If ``readby = True``, then return the sequence of operations that will
+        depend on ``key``, instead. With ``strict = True``, drop ``key`` from the
+        result.
         """
         if key not in self:
             return []
@@ -161,7 +164,7 @@ class TemporariesGraph(OrderedDict):
         queue = OrderedDict([(key, self[key])])
         while queue:
             k, v = queue.popitem(last=False)
-            reads = self.extract(k)
+            reads = self.extract(k, readby=readby)
             if set(reads).issubset(set(found.values())):
                 # All dependencies satisfied, schedulable
                 found[k] = v
@@ -173,7 +176,9 @@ class TemporariesGraph(OrderedDict):
                 scalars = [i for i in reads if i.is_scalar]
                 queue = OrderedDict([(i.lhs, i) for i in scalars] +
                                     [(k, v)] + list(queue.items()))
-        return found.values()
+        if strict is True:
+            found.pop(key)
+        return tuple(found.values())
 
     def reschedule(self, context):
         """
@@ -240,6 +245,9 @@ class TemporariesGraph(OrderedDict):
                 if i in self:
                     # Go on with the search
                     temporaries.append(i)
+                elif isinstance(i, Dimension):
+                    # Go on with the search, as /i/ is not a time dimension
+                    continue
                 elif not i.base.function.is_SymbolicData:
                     # It didn't come from the outside and it's not in self, so
                     # cannot determine if time-invariant; assume time-varying

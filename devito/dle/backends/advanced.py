@@ -5,9 +5,11 @@ from __future__ import absolute_import
 from collections import OrderedDict
 from itertools import combinations
 
+import cgen
 import numpy as np
 import psutil
 
+from devito.cgen_utils import ccode
 from devito.dimension import Dimension
 from devito.dle import (compose_nodes, copy_arrays, filter_iterations,
                         fold_blockable_tree, unfold_blocked_tree,
@@ -35,6 +37,7 @@ class DevitoRewriter(BasicRewriter):
         if self.params['openmp'] is True:
             self._ompize(state)
         self._create_elemental_functions(state)
+        self._minimize_remainders(state)
 
     @dle_pass
     def _loop_fission(self, state, **kwargs):
@@ -259,8 +262,8 @@ class DevitoRewriter(BasicRewriter):
                     for i in vector_iterations:
                         handle = FindSymbols('symbolics').visit(i)
                         try:
-                            aligned = [j for j in handle
-                                       if j.shape[-1] % get_simd_items(j.dtype) == 0]
+                            aligned = [j for j in handle if j.is_Tensor and
+                                       j.shape[-1] % get_simd_items(j.dtype) == 0]
                         except KeyError:
                             aligned = []
                         if aligned:
@@ -325,7 +328,7 @@ class DevitoRewriter(BasicRewriter):
 
                     # Track the thread-private and thread-shared variables
                     private.extend([i for i in FindSymbols('symbolics').visit(root)
-                                    if i._mem_stack])
+                                    if i.is_TensorFunction and i._mem_stack])
 
                 # Build the parallel region
                 private = sorted(set([i.name for i in private]))
@@ -343,6 +346,90 @@ class DevitoRewriter(BasicRewriter):
 
         return {'nodes': processed}
 
+    @dle_pass
+    def _minimize_remainders(self, state, **kwargs):
+        """
+        Reshape temporary tensors and adjust loop trip counts to prevent as many
+        compiler-generated remainder loops as possible.
+        """
+
+        mapper = {}
+        for tree in retrieve_iteration_tree(state.nodes + state.elemental_functions):
+            vector_iterations = [i for i in tree if i.is_Vectorizable]
+            if not vector_iterations:
+                continue
+            assert len(vector_iterations) == 1
+            root = vector_iterations[0]
+            if root.tag is None:
+                continue
+
+            # Padding
+            writes = [i for i in FindSymbols('symbolics-writes').visit(root)
+                      if i.is_TensorFunction]
+            padding = []
+            for i in writes:
+                try:
+                    simd_items = get_simd_items(i.dtype)
+                except KeyError:
+                    # Fallback to 16 (maximum expectable padding, for AVX512 registers)
+                    simd_items = simdinfo['avx512f'] / np.dtype(i.dtype).itemsize
+                padding.append(simd_items - i.shape[-1] % simd_items)
+            if len(set(padding)) == 1:
+                padding = padding[0]
+                for i in writes:
+                    i.update(shape=i.shape[:-1] + (i.shape[-1] + padding,))
+            else:
+                # Padding must be uniform -- not the case, so giving up
+                continue
+
+            # Dynamic trip count adjustment
+            endpoint = root.end_symbolic
+            if not endpoint.is_Symbol:
+                continue
+            condition = []
+            externals = set(i.symbolic_shape[-1] for i in FindSymbols().visit(root))
+            for i in root.uindices:
+                for j in externals:
+                    condition.append(root.end_symbolic + padding < j)
+            condition = ' || '.join(ccode(i) for i in condition)
+            endpoint_padded = endpoint.func(name='_%s' % endpoint.name)
+            init = cgen.Initializer(
+                cgen.Value("const int", endpoint_padded),
+                cgen.Line('(%s) ? %s : %s' % (condition,
+                                              ccode(endpoint + padding),
+                                              endpoint))
+            )
+
+            # Update the Iteration bound
+            limits = list(root.limits)
+            limits[1] = endpoint_padded.func(endpoint_padded.name)
+            rebuilt = list(tree)
+            rebuilt[rebuilt.index(root)] = root._rebuild(limits=limits)
+
+            mapper[tree[0]] = List(header=init, body=compose_nodes(rebuilt))
+
+        nodes = Transformer(mapper).visit(state.nodes)
+        elemental_functions = Transformer(mapper).visit(state.elemental_functions)
+
+        return {'nodes': nodes, 'elemental_functions': elemental_functions}
+
+
+class DevitoRewriterSafeMath(DevitoRewriter):
+
+    """
+    This Rewriter is slightly less aggressive than :class:`DevitoRewriter`, as it
+    doesn't drop denormal numbers, which may sometimes harm the numerical precision.
+    Loop fission is also avoided (to avoid reassociation of operations).
+    """
+
+    def _pipeline(self, state):
+        self._loop_blocking(state)
+        self._simdize(state)
+        if self.params['openmp'] is True:
+            self._ompize(state)
+        self._create_elemental_functions(state)
+        self._minimize_remainders(state)
+
 
 class DevitoSpeculativeRewriter(DevitoRewriter):
 
@@ -356,6 +443,7 @@ class DevitoSpeculativeRewriter(DevitoRewriter):
         if self.params['openmp'] is True:
             self._ompize(state)
         self._create_elemental_functions(state)
+        self._minimize_remainders(state)
 
     @dle_pass
     def _padding(self, state, **kwargs):
@@ -455,6 +543,7 @@ class DevitoCustomRewriter(DevitoSpeculativeRewriter):
     passes_mapper = {
         'blocking': DevitoSpeculativeRewriter._loop_blocking,
         'openmp': DevitoSpeculativeRewriter._ompize,
+        'simd': DevitoSpeculativeRewriter._simdize,
         'fission': DevitoSpeculativeRewriter._loop_fission,
         'padding': DevitoSpeculativeRewriter._padding,
         'split': DevitoSpeculativeRewriter._create_elemental_functions

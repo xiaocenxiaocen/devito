@@ -66,7 +66,7 @@ class AcousticWaveSolver(object):
                                receiver=self.receiver, time_order=self.time_order,
                                space_order=self.space_order, **self._kwargs)
 
-    @property
+    @cached_property
     def op_grad(self):
         """Cached operator for gradient runs"""
         return GradientOperator(self.model, save=False, source=self.source,
@@ -103,8 +103,8 @@ class AcousticWaveSolver(object):
 
         # Create the forward wavefield if not provided
         if u is None:
-            u = TimeData(name='u', shape=self.model.shape_domain,
-                         save=save, time_dim=self.source.nt,
+            u = TimeData(name='u', shape=self.model.shape_domain, save=save,
+                         time_dim=self.source.nt if save else None,
                          time_order=self.time_order,
                          space_order=self.space_order,
                          dtype=self.model.dtype)
@@ -222,8 +222,7 @@ class AcousticWaveSolver(object):
 
         # Create the forward wavefield
         if v is None:
-            v = TimeData(name='v', shape=self.model.shape_domain,
-                         save=False, time_dim=self.source.nt,
+            v = TimeData(name='v', shape=self.model.shape_domain, save=False,
                          time_order=self.time_order,
                          space_order=self.space_order,
                          dtype=self.model.dtype)
