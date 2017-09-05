@@ -415,6 +415,7 @@ class Operator(Function):
         Retrieve the symbolic functions read or written by the Operator,
         as well as all traversed dimensions.
         """
+
         input = flatten(terminals(i) for i in expressions)
         input = filter_sorted([i.base.function for i in input], key=attrgetter('name'))
 
