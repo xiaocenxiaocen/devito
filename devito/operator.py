@@ -456,7 +456,7 @@ class OperatorRunnable(Operator):
         self.cfunction(*list(arguments.values()))
 
         # Output summary of performance achieved
-        summary = self.profiler.summary(dim_sizes, self.dtype)
+        summary = self.profiler.summary(arguments, self.dtype)
         with bar():
             for k, v in summary.items():
                 name = '%s<%s>' % (k, ','.join('%d' % i for i in v.itershape))
