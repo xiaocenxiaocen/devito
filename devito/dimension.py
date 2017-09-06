@@ -32,6 +32,18 @@ class Dimension(Symbol, DimensionArgProvider):
         """The symbolic size of this dimension."""
         return self.rtargs[0].as_symbol
 
+    @property
+    def symbolic_extent(self):
+        """Return the extent of the loop over this dimension.
+        Would be the same as size if using default values """
+        _, start, end = self.rtargs
+        return (end.as_symbol - start.as_symbol)
+
+    @property
+    def limits(self):
+        _, start, end = self.rtargs
+        return (start.as_symbol, end.as_symbol, 1)
+
 
 class FixedDimension(FixedDimensionArgProvider, Dimension):
 
@@ -50,6 +62,10 @@ class FixedDimension(FixedDimensionArgProvider, Dimension):
     def symbolic_size(self):
         """The symbolic size of this dimension."""
         return Number(self.size)
+
+    @property
+    def limits(self):
+        return (0, self.size, 1)
 
 
 class BufferedDimension(Dimension):
