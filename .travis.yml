@@ -71,8 +71,9 @@ script:
   - python examples/benchmark.py test -P acoustic -a
   - python examples/seismic/acoustic/acoustic_example.py --full
   - python examples/seismic/acoustic/constant_example.py --full
-  - py.test -vs examples/seismic/tutorials
-  - py.test -vs examples/cfd
+  # Test tutorial notebooks for the webpage using nbval
+  - py.test -vs --nbval-lax examples/seismic/tutorials
+  - py.test -vs --nbval-lax examples/cfd
 
   # Docs generation and deployment
   - sphinx-apidoc -f -o docs/ examples
