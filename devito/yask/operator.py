@@ -1,8 +1,5 @@
 from __future__ import absolute_import
 
-from collections import OrderedDict
-
-from ctypes import c_void_p
 from sympy import Indexed
 
 from devito.compiler import jit_compile
