@@ -24,7 +24,7 @@ def plot_perturbation(model, model1, colorbar=True):
     dv = np.transpose(model.vp) - np.transpose(model1.vp)
 
     plot = plt.imshow(dv, animated=True, cmap=cm.jet,
-                      vmin=min(dv.reshape(-1)), vmax=max(dv.reshape(-1)),
+                      vmin=min(dv.reshape(-1)), vmax=-min(dv.reshape(-1)),
                       extent=extent)
     plt.xlabel('X position (km)')
     plt.ylabel('Depth (km)')

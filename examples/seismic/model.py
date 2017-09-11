@@ -93,10 +93,13 @@ def demo_model(preset, **kwargs):
         v = v.reshape(shape)
 
         # Cut the model to make it slightly cheaper
-        v = v[301:-300, :]
+        if not kwargs.get('full', False):
+            v = v[301:-300, :]
+        else:
+            v = v[301:, :]
 
         return Model(vp=v, origin=origin, shape=v.shape,
-                     spacing=spacing, nbpml=20)
+                     spacing=spacing, nbpml=40)
 
     else:
         error('Unknown model preset name %s' % preset)
