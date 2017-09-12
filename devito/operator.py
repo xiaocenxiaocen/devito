@@ -1,283 +1,511 @@
-from functools import reduce
+from __future__ import absolute_import
 
+from collections import OrderedDict, namedtuple
+from operator import attrgetter
+
+import ctypes
 import numpy as np
-from sympy import Eq, solve
+import sympy
 
-from devito.compiler import get_compiler_from_env
-from devito.dimension import t, x, y, z
-from devito.dse.inspection import (indexify, retrieve_dimensions,
-                                   retrieve_symbols, tolambda)
-from devito.interfaces import TimeData
-from devito.propagator import Propagator
+from devito.cgen_utils import Allocator
+from devito.compiler import jit_compile, load
+from devito.dimension import time, Dimension
+from devito.dle import compose_nodes, filter_iterations, transform
+from devito.dse import clusterize, indexify, rewrite, q_indexed, retrieve_terminals
+from devito.interfaces import Forward, Backward, CompositeData, Object
+from devito.logger import bar, error, info
+from devito.nodes import Element, Expression, Function, Iteration, List, LocalExpression
+from devito.parameters import configuration
+from devito.profiling import create_profile
+from devito.stencil import Stencil
+from devito.tools import as_tuple, filter_sorted, flatten, numpy_to_ctypes, partial_order
+from devito.visitors import (FindScopes, ResolveIterationVariable,
+                             SubstituteExpression, Transformer, NestedTransformer)
+from devito.exceptions import InvalidArgument, InvalidOperator
 
-__all__ = ['Operator']
 
+class Operator(Function):
 
-class Operator(object):
-    """Class encapsulating a defined operator as defined by the given stencil
+    _default_headers = ['#define _POSIX_C_SOURCE 200809L']
+    _default_includes = ['stdlib.h', 'math.h', 'sys/time.h']
+    _default_globals = []
 
-    The Operator class is the core abstraction in DeVito that allows
-    users to generate high-performance Finite Difference kernels from
-    a stencil definition defined from SymPy equations.
+    """A special :class:`Function` to generate and compile C code evaluating
+    an ordered sequence of stencil expressions.
 
-    :param nt: Number of timesteps to execute
-    :param shape: Shape of the data buffer over which to execute
-    :param dtype: Data type for the grid buffer
-    :param stencils: SymPy equation or list of equations that define the
-                     stencil used to create the kernel of this Operator.
-    :param subs: Dict or list of dicts containing the SymPy symbol
-                 substitutions for each stencil respectively.
-    :param spc_border: Number of spatial padding layers
-    :param time_order: Order of the time discretisation
-    :param forward: Flag indicating whether to execute forward in time
-    :param compiler: Compiler class used to perform JIT compilation.
-                     If not provided, the compiler will be inferred from the
-                     environment variable DEVITO_ARCH, or default to GNUCompiler.
-    :param profile: Flag to enable performance profiling
-    :param dse: Set of transformations applied by the Devito Symbolic Engine.
-                Available: [None, 'basic', 'advanced' (default)]
-    :param cache_blocking: Block sizes used for cache clocking. Can be either a single
-                           number used for all dimensions except inner most or a list
-                           explicitly stating block sizes for each dimension
-                           Set cache_blocking to None to skip blocking on that dim
-                           Set cache_blocking to AutoTuner instance, to use auto tuned
-                           tuned block sizes
-    :param input_params: List of symbols that are expected as input.
-    :param output_params: List of symbols that define operator output.
+    :param expressions: SymPy equation or list of equations that define the
+                        the kernel of this Operator.
+    :param kwargs: Accept the following entries: ::
+
+        * name : Name of the kernel function - defaults to "Kernel".
+        * subs : Dict or list of dicts containing SymPy symbol substitutions
+                 for each expression respectively.
+        * time_axis : :class:`TimeAxis` object to indicate direction in which
+                      to advance time during computation.
+        * dse : Use the Devito Symbolic Engine to optimize the expressions -
+                defaults to ``configuration['dse']``.
+        * dle : Use the Devito Loop Engine to optimize the loops -
+                defaults to ``configuration['dle']``.
     """
-    def __init__(self, nt, shape, dtype=np.float32, stencils=[],
-                 subs=[], spc_border=0, time_order=0,
-                 forward=True, compiler=None, profile=False, dse='advanced',
-                 cache_blocking=None, input_params=None,
-                 output_params=None):
-        # Derive JIT compilation infrastructure
-        self.compiler = compiler or get_compiler_from_env()
+    def __init__(self, expressions, **kwargs):
+        expressions = as_tuple(expressions)
 
-        # Ensure stencil and substititutions are lists internally
-        self.stencils = stencils if isinstance(stencils, list) else [stencils]
-        subs = subs if isinstance(subs, list) else [subs]
-        self.input_params = input_params
-        self.output_params = output_params
+        # Input check
+        if any(not isinstance(i, sympy.Eq) for i in expressions):
+            raise InvalidOperator("Only SymPy expressions are allowed.")
 
-        # Get functions and symbols in LHS/RHS and update params
-        sym_undef = set()
+        self.name = kwargs.get("name", "Kernel")
+        subs = kwargs.get("subs", {})
+        time_axis = kwargs.get("time_axis", Forward)
+        dse = kwargs.get("dse", configuration['dse'])
+        dle = kwargs.get("dle", configuration['dle'])
 
-        for eqn in self.stencils:
-            lhs_def, lhs_undef = retrieve_symbols(eqn.lhs)
-            sym_undef.update(lhs_undef)
+        # Header files, etc.
+        self._headers = list(self._default_headers)
+        self._includes = list(self._default_includes)
+        self._globals = list(self._default_globals)
 
-            if self.output_params is None:
-                self.output_params = list(lhs_def)
+        # Required for compilation
+        self._compiler = configuration['compiler']
+        self._lib = None
+        self._cfunction = None
 
-            rhs_def, rhs_undef = retrieve_symbols(eqn.rhs)
-            sym_undef.update(rhs_undef)
+        # Set the direction of time acoording to the given TimeAxis
+        time.reverse = time_axis == Backward
 
-            if self.input_params is None:
-                self.input_params = list(rhs_def)
+        # Expression lowering
+        expressions = [indexify(s) for s in expressions]
+        expressions = [s.xreplace(subs) for s in expressions]
 
-        # Pull all dimension indices from the incoming stencil
-        dimensions = []
-        for eqn in self.stencils:
-            dimensions += [i for i in retrieve_dimensions(eqn.lhs) if i not in dimensions]
-            dimensions += [i for i in retrieve_dimensions(eqn.rhs) if i not in dimensions]
+        # Analysis
+        self.dtype = self._retrieve_dtype(expressions)
+        self.input, self.output, self.dimensions = self._retrieve_symbols(expressions)
+        stencils = self._retrieve_stencils(expressions)
 
-        # Time dimension is fixed for now
-        time_dim = t
+        # Parameters of the Operator (Dimensions necessary for data casts)
+        parameters = self.input + [i for i in self.dimensions if i.size is None]
 
-        # Derive space dimensions from expression
-        self.space_dims = None
+        # Group expressions based on their Stencil
+        clusters = clusterize(expressions, stencils)
 
-        if len(dimensions) > 0:
-            self.space_dims = dimensions
+        # Apply the Devito Symbolic Engine (DSE) for symbolic optimization
+        clusters = rewrite(clusters, mode=set_dse_mode(dse))
 
-            if time_dim in self.space_dims:
-                self.space_dims.remove(time_dim)
-        else:
-            # Default space dimension symbols
-            self.space_dims = ((x, z) if len(shape) == 2 else (x, y, z))[:len(shape)]
+        # Wrap expressions with Iterations according to dimensions
+        nodes = self._schedule_expressions(clusters)
 
-        # Remove known dimensions from undefined symbols
-        for d in dimensions:
-            sym_undef.remove(d)
+        # Introduce C-level profiling infrastructure
+        nodes, self.profiler = self._profile_sections(nodes, parameters)
 
-        # TODO: We should check that all undfined symbols have known subs
-        # Shift time indices so that LHS writes into t only,
-        # eg. u[t+2] = u[t+1] + u[t]  -> u[t] = u[t-1] + u[t-2]
-        self.stencils = [eqn.subs(t, t + solve(eqn.lhs.args[0], t)[0])
-                         if isinstance(eqn.lhs, TimeData) else eqn
-                         for eqn in self.stencils]
+        # Resolve and substitute dimensions for loop index variables
+        subs = {}
+        nodes = ResolveIterationVariable().visit(nodes, subs=subs)
+        nodes = SubstituteExpression(subs=subs).visit(nodes)
 
-        # Convert incoming stencil equations to "indexed access" format
-        self.stencils = [Eq(indexify(eqn.lhs), indexify(eqn.rhs))
-                         for eqn in self.stencils]
+        # Apply the Devito Loop Engine (DLE) for loop optimization
+        dle_state = transform(nodes, *set_dle_mode(dle))
 
-        # Apply user-defined subs to stencil
-        self.stencils = [eqn.subs(subs[0]) for eqn in self.stencils]
+        # Update the Operator state based on the DLE
+        self.dle_arguments = dle_state.arguments
+        self.dle_flags = dle_state.flags
+        self.func_table = OrderedDict([(i.name, FunMeta(i, True))
+                                       for i in dle_state.elemental_functions])
+        parameters.extend([i.argument for i in self.dle_arguments])
+        self.dimensions.extend([i.argument for i in self.dle_arguments
+                                if isinstance(i.argument, Dimension)])
+        self._includes.extend(list(dle_state.includes))
 
-        self.propagator = Propagator(self.getName(), nt, shape, self.stencils, dse=dse,
-                                     dtype=dtype, spc_border=spc_border,
-                                     time_order=time_order, forward=forward,
-                                     space_dims=self.space_dims, compiler=self.compiler,
-                                     profile=profile, cache_blocking=cache_blocking)
-        self.dtype = dtype
-        self.nt = nt
-        self.shape = shape
-        self.spc_border = spc_border
-        self.time_order = time_order
-        self.symbol_to_data = {}
+        # Translate into backend-specific representation (e.g., GPU, Yask)
+        nodes = self._specialize(dle_state.nodes, parameters)
 
-        for param in self.signature:
-            self.propagator.add_devito_param(param)
-            self.symbol_to_data[param.name] = param
+        # Introduce all required C declarations
+        nodes = self._insert_declarations(nodes)
+
+        # Finish instantiation
+        super(Operator, self).__init__(self.name, nodes, 'int', parameters, ())
+
+    def arguments(self, **kwargs):
+        """ Process any apply-time arguments passed to apply and derive values for
+            any remaining arguments
+        """
+        new_params = {}
+        # If we've been passed CompositeData objects as kwargs, they might have children
+        # that need to be substituted as well.
+        for k, v in kwargs.items():
+            if isinstance(v, CompositeData):
+                orig_param_l = [i for i in self.input if i.name == k]
+                # If I have been passed a parameter, I must have seen it before
+                if len(orig_param_l) == 0:
+                    raise InvalidArgument("Parameter %s does not exist in expressions " +
+                                          "passed to this Operator" % k)
+                # We've made sure the list isn't empty. Names should be unique so it
+                # should have exactly one entry
+                assert(len(orig_param_l) == 1)
+                orig_param = orig_param_l[0]
+                # Pull out the children and add them to kwargs
+                for orig_child, new_child in zip(orig_param.children, v.children):
+                    new_params[orig_child.name] = new_child
+        kwargs.update(new_params)
+
+        # Derivation. It must happen in the order [tensors -> dimensions -> scalars]
+        for i in self.parameters:
+            if i.is_TensorArgument:
+                assert(i.verify(kwargs.pop(i.name, None)))
+        runtime_dimensions = [d for d in self.dimensions if d.value is not None]
+        for d in runtime_dimensions:
+            d.verify(kwargs.pop(d.name, None))
+        for i in self.parameters:
+            if i.is_ScalarArgument:
+                i.verify(kwargs.pop(i.name, None))
+
+        dim_sizes = OrderedDict([(d.name, d.value) for d in runtime_dimensions])
+        dle_arguments, autotune = self._dle_arguments(dim_sizes)
+        dim_sizes.update(dle_arguments)
+
+        autotune = autotune and kwargs.pop('autotune', False)
+
+        # Make sure we've used all arguments passed
+        if len(kwargs) > 0:
+            raise InvalidArgument("Unknown arguments passed: " + ", ".join(kwargs.keys()))
+
+        mapper = OrderedDict([(d.name, d) for d in self.dimensions])
+        for d, v in dim_sizes.items():
+            assert(mapper[d].verify(v))
+
+        arguments = self._default_args()
+
+        if autotune:
+            arguments = self._autotune(arguments)
+
+        # Clear the temp values we stored in the arg objects since we've pulled them out
+        # into the OrderedDict object above
+        self._reset_args()
+
+        return arguments, dim_sizes
+
+    def _default_args(self):
+        return OrderedDict([(x.name, x.value) for x in self.parameters])
+
+    def _reset_args(self):
+        """
+        Reset any runtime argument derivation information from a previous run.
+        """
+        for x in list(self.parameters) + self.dimensions:
+            x.reset()
+
+    def _dle_arguments(self, dim_sizes):
+        # Add user-provided block sizes, if any
+        dle_arguments = OrderedDict()
+        autotune = True
+        for i in self.dle_arguments:
+            dim_size = dim_sizes.get(i.original_dim.name, i.original_dim.size)
+            if dim_size is None:
+                error('Unable to derive size of dimension %s from defaults. '
+                      'Please provide an explicit value.' % i.original_dim.name)
+                raise InvalidArgument('Unknown dimension size')
+            if i.value:
+                try:
+                    dle_arguments[i.argument.name] = i.value(dim_size)
+                except TypeError:
+                    dle_arguments[i.argument.name] = i.value
+                    autotune = False
+            else:
+                dle_arguments[i.argument.name] = dim_size
+        return dle_arguments, autotune
 
     @property
-    def signature(self):
-        """List of data object parameters that define the operator signature
+    def elemental_functions(self):
+        return tuple(i.root for i in self.func_table.values())
 
-        :returns: List of unique input and output data objects
+    @property
+    def compile(self):
         """
-        return self.input_params + [param for param in self.output_params
-                                    if param not in self.input_params]
+        JIT-compile the C code generated by the Operator.
 
-    def apply(self, debug=False):
+        It is ensured that JIT compilation will only be performed once per
+        :class:`Operator`, reagardless of how many times this method is invoked.
+
+        :returns: The file name of the JIT-compiled function.
         """
-        :param debug: If True, use Python to apply the operator. Default False.
-        :returns: A tuple containing the values of the operator outputs or compiled
-                  function and its args
+        if self._lib is None:
+            # No need to recompile if a shared object has already been loaded.
+            return jit_compile(self.ccode, self._compiler)
+        else:
+            return self._lib.name
+
+    @property
+    def cfunction(self):
+        """Returns the JIT-compiled C function as a ctypes.FuncPtr object."""
+        if self._lib is None:
+            basename = self.compile
+            self._lib = load(basename, self._compiler)
+            self._lib.name = basename
+
+        if self._cfunction is None:
+            self._cfunction = getattr(self._lib, self.name)
+            # Associate a C type to each argument for runtime type check
+            argtypes = []
+            for i in self.parameters:
+                if i.is_ScalarArgument:
+                    argtypes.append(numpy_to_ctypes(i.dtype))
+                elif i.is_TensorArgument:
+                    argtypes.append(np.ctypeslib.ndpointer(dtype=i.dtype, flags='C'))
+                else:
+                    argtypes.append(ctypes.c_void_p)
+            self._cfunction.argtypes = argtypes
+
+        return self._cfunction
+
+    def _profile_sections(self, nodes, parameters):
+        """Introduce C-level profiling nodes within the Iteration/Expression tree."""
+        return List(body=nodes), None
+
+    def _autotune(self, arguments):
+        """Use auto-tuning on this Operator to determine empirically the
+        best block sizes when loop blocking is in use."""
+        return arguments
+
+    def _schedule_expressions(self, clusters):
+        """Wrap :class:`Expression` objects, already grouped in :class:`Cluster`
+        objects, within nested :class:`Iteration` objects (representing loops),
+        according to dimensions and stencils."""
+
+        # Topologically sort Iterations
+        ordering = partial_order([i.stencil.dimensions for i in clusters])
+        for i, d in enumerate(list(ordering)):
+            if d.is_Buffered:
+                ordering.insert(i, d.parent)
+
+        # Build the Iteration/Expression tree
+        processed = []
+        schedule = OrderedDict()
+        atomics = ()
+        for i in clusters:
+            # Build the Expression objects to be inserted within an Iteration tree
+            expressions = [Expression(v, np.int32 if i.trace.is_index(k) else self.dtype)
+                           for k, v in i.trace.items()]
+
+            if not i.stencil.empty:
+                root = None
+                entries = i.stencil.entries
+
+                # Reorder based on the globally-established loop ordering
+                entries = sorted(entries, key=lambda i: ordering.index(i.dim))
+
+                # Can I reuse any of the previously scheduled Iterations ?
+                index = 0
+                for j0, j1 in zip(entries, list(schedule)):
+                    if j0 != j1 or j0.dim in atomics:
+                        break
+                    root = schedule[j1]
+                    index += 1
+                needed = entries[index:]
+
+                # Build and insert the required Iterations
+                iters = [Iteration([], j.dim, j.dim.size, offsets=j.ofs) for j in needed]
+                body, tree = compose_nodes(iters + [expressions], retrieve=True)
+                scheduling = OrderedDict(zip(needed, tree))
+                if root is None:
+                    processed.append(body)
+                    schedule = scheduling
+                else:
+                    nodes = list(root.nodes) + [body]
+                    mapper = {root: root._rebuild(nodes, **root.args_frozen)}
+                    transformer = Transformer(mapper)
+                    processed = list(transformer.visit(processed))
+                    schedule = OrderedDict(list(schedule.items())[:index] +
+                                           list(scheduling.items()))
+                    for k, v in list(schedule.items()):
+                        schedule[k] = transformer.rebuilt.get(v, v)
+            else:
+                # No Iterations are needed
+                processed.extend(expressions)
+
+            # Track dimensions that cannot be fused at next stage
+            atomics = i.atomics
+
+        return List(body=processed)
+
+    def _specialize(self, nodes, parameters):
+        """Transform the Iteration/Expression tree into a backend-specific
+        representation, such as code to be executed on a GPU or through a
+        lower-level tool."""
+        return nodes
+
+    def _insert_declarations(self, nodes):
+        """Populate the Operator's body with the required array and variable
+        declarations, to generate a legal C file."""
+
+        # Resolve function calls first
+        scopes = []
+        for k, v in FindScopes().visit(nodes).items():
+            if k.is_FunCall:
+                func = self.func_table[k.name]
+                if func.local:
+                    scopes.extend(FindScopes().visit(func.root, queue=list(v)).items())
+            else:
+                scopes.append((k, v))
+
+        # Determine all required declarations
+        allocator = Allocator()
+        mapper = OrderedDict()
+        for k, v in scopes:
+            if k.is_scalar:
+                # Inline declaration
+                mapper[k] = LocalExpression(**k.args)
+            elif k.output_function._mem_external:
+                # Nothing to do, variable passed as kernel argument
+                continue
+            elif k.output_function._mem_stack:
+                # On the stack, as established by the DLE
+                key = lambda i: not i.is_Parallel
+                site = filter_iterations(v, key=key, stop='asap') or [nodes]
+                allocator.push_stack(site[-1], k.output_function)
+            else:
+                # On the heap, as a tensor that must be globally accessible
+                allocator.push_heap(k.output_function)
+
+        # Introduce declarations on the stack
+        for k, v in allocator.onstack:
+            mapper[k] = tuple(Element(i) for i in v)
+        nodes = NestedTransformer(mapper).visit(nodes)
+        for k, v in list(self.func_table.items()):
+            if v.local:
+                self.func_table[k] = FunMeta(Transformer(mapper).visit(v.root), v.local)
+
+        # Introduce declarations on the heap (if any)
+        if allocator.onheap:
+            decls, allocs, frees = zip(*allocator.onheap)
+            nodes = List(header=decls + allocs, body=nodes, footer=frees)
+
+        return nodes
+
+    def _retrieve_dtype(self, expressions):
         """
-        if debug:
-            return self.apply_python()
-
-        self.propagator.run(self.get_args())
-
-        return tuple([param for param in self.output_params])
-
-    def apply_python(self):
-        """Uses Python to apply the operator
-
-        :returns: A tuple containing the values of the operator outputs
+        Retrieve the data type of a set of expressions. Raise an error if there
+        is no common data type (ie, if at least one expression differs in the
+        data type).
         """
-        self.run_python()
+        lhss = set([s.lhs.base.function.dtype for s in expressions])
+        if len(lhss) != 1:
+            raise RuntimeError("Expression types mismatch.")
+        return lhss.pop()
 
-        return tuple([param.data for param in self.output_params])
+    def _retrieve_stencils(self, expressions):
+        """Determine the :class:`Stencil` of each provided expression."""
+        stencils = [Stencil(i) for i in expressions]
+        dimensions = set.union(*[set(i.dimensions) for i in stencils])
 
-    def symbol_to_var(self, term, ti, indices=[]):
-        """Retrieves the Python data from a symbol
+        # Filter out aliasing buffered dimensions
+        mapper = {d.parent: d for d in dimensions if d.is_Buffered}
+        for i in list(stencils):
+            for d in i.dimensions:
+                if d in mapper:
+                    i[mapper[d]] = i.pop(d).union(i.get(mapper[d], set()))
 
-        :param term: The symbol from which the data has to be retrieved
-        :param ti: The value of t to use
-        :param indices: A list of indices to use for the space dimensions
-        :returns: A tuple containing the data and the indices to access it
+        return stencils
+
+    def _retrieve_symbols(self, expressions):
         """
-        arr = self.symbol_to_data[str(term.base.label)].data
-        num_ind = []
-
-        for ind in term.indices:
-            ind = ind.subs({t: ti}).subs(tuple(zip(self.space_dims, indices)))
-            num_ind.append(ind)
-
-        return (arr, tuple(num_ind))
-
-    def run_python(self):
+        Retrieve the symbolic functions read or written by the Operator,
+        as well as all traversed dimensions.
         """
-        Execute the operator using Python
-        """
-        time_loop_limits = self.propagator.time_loop_limits
-        time_loop_lambdas_b = tolambda(self.propagator.time_loop_stencils_b)
-        time_loop_lambdas_a = tolambda(self.propagator.time_loop_stencils_a)
-        stencil_lambdas = tolambda(self.stencils)
+        terms = flatten(retrieve_terminals(i) for i in expressions)
 
-        for ti in range(*time_loop_limits):
-            # Run time loop stencils before space loop
-            for lams, expr in zip(time_loop_lambdas_b,
-                                  self.propagator.time_loop_stencils_b):
-                lamda = lams[0]
-                subs = lams[1]
-                arr_lhs, ind_lhs = self.symbol_to_var(expr.lhs, ti)
-                args = []
+        input = []
+        for i in terms:
+            try:
+                input.append(i.base.function)
+            except AttributeError:
+                pass
+        input = filter_sorted(input, key=attrgetter('name'))
 
-                for sub in subs:
-                    arr, ind = self.symbol_to_var(sub, ti)
-                    args.append(arr[ind])
+        output = [i.lhs.base.function for i in expressions if q_indexed(i.lhs)]
 
-                arr_lhs[ind_lhs] = lamda(*args)
+        indexeds = [i for i in terms if q_indexed(i)]
+        dimensions = []
+        for indexed in indexeds:
+            for i in indexed.indices:
+                dimensions.extend([k for k in i.free_symbols
+                                   if isinstance(k, Dimension)])
+            dimensions.extend(list(indexed.base.function.indices))
+        dimensions.extend([d.parent for d in dimensions if d.is_Buffered])
+        dimensions = filter_sorted(dimensions, key=attrgetter('name'))
 
-            lower_limits = [self.spc_border]*len(self.shape)
-            upper_limits = [x-self.spc_border for x in self.shape]
-            indices = lower_limits[:]
-
-            # Number of iterations in each dimension
-            total_size_arr = [a - b for a, b in zip(upper_limits, lower_limits)]
-
-            # Total number of iterations
-            total_iter = reduce(lambda x, y: x*y, total_size_arr)
-
-            # The 2/3 dimensional space loop has been collapsed to a single loop
-            for iter_index in range(0, total_iter):
-                dimension_limit = 1
-
-                # Calculating 2/3 dimensional index based on 1D index
-                indices[0] = lower_limits[0] + iter_index % total_size_arr[0]
-
-                for dimension in range(1, len(self.shape)):
-                    dimension_limit *= total_size_arr[dimension]
-                    indices[dimension] = int(iter_index / dimension_limit)
-
-                for lams, expr in zip(stencil_lambdas, self.stencils):
-                    lamda = lams[0]
-                    subs = lams[1]
-                    arr_lhs, ind_lhs = self.symbol_to_var(expr.lhs, ti, indices)
-                    args = []
-
-                    for s in subs:
-                        arr, ind = self.symbol_to_var(s, ti, indices)
-                        args.append(arr[ind])
-
-                    arr_lhs[ind_lhs] = lamda(*args)
-
-            # Time loop stencils for after space loop
-            for lams, expr in zip(time_loop_lambdas_a,
-                                  self.propagator.time_loop_stencils_a):
-                lamda = lams[0]
-                subs = lams[1]
-                arr_lhs, ind_lhs = self.symbol_to_var(expr.lhs, ti)
-                args = []
-
-                for s in subs:
-                    arr, ind = self.symbol_to_var(s, ti)
-                    args.append(arr[ind])
-
-                arr_lhs[ind_lhs] = lamda(*args)
-
-    def getName(self):
-        """Gives the name of the class
-
-        :returns: The name of the class
-        """
-        return self.__class__.__name__
-
-    def get_args(self):
-        """
-        Initialises all the input args and returns them
-        :return: a list of input params
-        """
-        for param in self.input_params:
-            if hasattr(param, 'initialize'):
-                param.initialize()
-        return [param.data for param in self.signature]
+        return input, output, dimensions
 
 
-class SimpleOperator(Operator):
-    def __init__(self, input_grid, output_grid, kernel, **kwargs):
-        assert(input_grid.shape == output_grid.shape)
+class OperatorRunnable(Operator):
+    """
+    A special :class:`Operator` that, besides generation and compilation of
+    C code evaluating stencil expressions, can also execute the computation.
+    """
 
-        nt = input_grid.shape[0]
-        shape = input_grid.shape[1:]
-        input_params = [input_grid]
-        output_params = [output_grid]
+    def __call__(self, **kwargs):
+        self.apply(**kwargs)
 
-        super(SimpleOperator, self).__init__(nt, shape, stencils=kernel,
-                                             subs={},
-                                             input_params=input_params,
-                                             output_params=output_params,
-                                             dtype=input_grid.dtype, **kwargs)
+    def apply(self, **kwargs):
+        """Apply the stencil kernel to a set of data objects"""
+        # Build the arguments list to invoke the kernel function
+        arguments, dim_sizes = self.arguments(**kwargs)
+
+        # Invoke kernel function with args
+        self.cfunction(*list(arguments.values()))
+
+        # Output summary of performance achieved
+        summary = self.profiler.summary(dim_sizes, self.dtype)
+        with bar():
+            for k, v in summary.items():
+                name = '%s<%s>' % (k, ','.join('%d' % i for i in v.itershape))
+                info("Section %s with OI=%.2f computed in %.3f s [Perf: %.2f GFlops/s]" %
+                     (name, v.oi, v.time, v.gflopss))
+
+        return summary
+
+    def _profile_sections(self, nodes, parameters):
+        """Introduce C-level profiling nodes within the Iteration/Expression tree."""
+        nodes, profiler = create_profile(nodes)
+        self._globals.append(profiler.cdef)
+        parameters.append(Object(profiler.varname, profiler.dtype, profiler.setup()))
+        return nodes, profiler
+
+
+# Misc helpers
+
+
+FunMeta = namedtuple('FunMeta', 'root local')
+"""
+Metadata for functions called by an Operator. ``local = True`` means that
+the function was generated by Devito itself.
+"""
+
+
+def set_dse_mode(mode):
+    """
+    Transform :class:`Operator` input in a format understandable by the DLE.
+    """
+    if not mode:
+        return 'noop'
+    elif isinstance(mode, str):
+        return mode
+    else:
+        try:
+            return ','.join(mode)
+        except:
+            raise TypeError("Illegal DSE mode %s." % str(mode))
+
+
+def set_dle_mode(mode):
+    """
+    Transform :class:`Operator` input in a format understandable by the DLE.
+    """
+    if not mode:
+        return 'noop', {}
+    elif isinstance(mode, str):
+        return mode, {}
+    elif isinstance(mode, tuple):
+        if len(mode) == 1:
+            return mode[0], {}
+        elif len(mode) == 2 and isinstance(mode[1], dict):
+            return mode
+    raise TypeError("Illegal DLE mode %s." % str(mode))

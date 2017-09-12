@@ -1,10 +1,12 @@
+import versioneer
 try:
-    from setuptools import setup
+    from setuptools import setup, find_packages
 except ImportError:
     from distutils.core import setup
 
 setup(name='devito',
-      version='2.0.1',
+      version=versioneer.get_version(),
+      cmdclass=versioneer.get_cmdclass(),
       description="Finite Difference DSL for symbolic computation.",
       long_descritpion="""Devito is a new tool for performing
       optimised Finite Difference (FD) computation from high-level
@@ -17,6 +19,7 @@ setup(name='devito',
       author="Imperial College London",
       author_email='opesci@imperial.ac.uk',
       license='MIT',
-      packages=['devito'],
-      install_requires=['numpy', 'sympy', 'mpmath', 'cgen', 'codepy'],
+      packages=find_packages(exclude=['docs', 'examples', 'tests']),
+      install_requires=['numpy', 'sympy==1.0', 'mpmath', 'cgen', 'codepy',
+                        'psutil', 'py-cpuinfo', 'cached-property'],
       test_requires=['pytest', 'flake8', 'isort'])

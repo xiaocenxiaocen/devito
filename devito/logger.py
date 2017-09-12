@@ -2,11 +2,15 @@
 
 import logging
 import sys
+from contextlib import contextmanager
+
+from devito.parameters import configuration
 
 __all__ = ('set_log_level', 'set_log_noperf', 'log',
-           'DEBUG', 'INFO', 'AUTOTUNER', 'DSE', 'DSE_WARN', 'WARNING',
-           'ERROR', 'CRITICAL',
+           'DEBUG', 'AUTOTUNER', 'YASK', 'YASK_WARN', 'INFO', 'DSE', 'DSE_WARN',
+           'DLE', 'DLE_WARN', 'WARNING', 'ERROR', 'CRITICAL',
            'log', 'warning', 'error', 'info_at', 'dse', 'dse_warning',
+           'dle', 'dle_warning',
            'RED', 'GREEN', 'BLUE')
 
 
@@ -14,21 +18,42 @@ logger = logging.getLogger('Devito')
 _ch = logging.StreamHandler()
 logger.addHandler(_ch)
 
-# Add extra levels between INFO (value=20) and WARNING (value=30)
+# Add extra logging levels (note: INFO has value=20, WARNING has value=30)
 DEBUG = logging.DEBUG
+AUTOTUNER = 19
+YASK = 19
+YASK_WARN = YASK
 INFO = logging.INFO
-AUTOTUNER = 27
 DSE = 28
+DLE = DSE
 DSE_WARN = 29
+DLE_WARN = DSE_WARN
 WARNING = logging.WARNING
 ERROR = logging.ERROR
 CRITICAL = logging.CRITICAL
 
 logging.addLevelName(AUTOTUNER, "AUTOTUNER")
+logging.addLevelName(YASK, "YASK")
+logging.addLevelName(YASK_WARN, "YASK_WARN")
 logging.addLevelName(DSE, "DSE")
 logging.addLevelName(DSE_WARN, "DSE_WARN")
+logging.addLevelName(DSE, "DLE")
+logging.addLevelName(DSE_WARN, "DLE_WARN")
 
-logger.setLevel(INFO)
+logger_registry = {
+    'DEBUG': DEBUG,
+    'AUTOTUNER': AUTOTUNER,
+    'YASK': YASK,
+    'YASK_WARN': YASK_WARN,
+    'INFO': INFO,
+    'DSE': DSE,
+    'DLE': DSE,
+    'DSE_WARN': DSE_WARN,
+    'DLE_WARN': DSE_WARN,
+    'WARNING': WARNING,
+    'ERROR': ERROR,
+    'CRITICAL': CRITICAL
+}
 
 NOCOLOR = '%s'
 RED = '\033[1;37;31m%s\033[0m'
@@ -36,11 +61,15 @@ BLUE = '\033[1;37;34m%s\033[0m'
 GREEN = '\033[1;37;32m%s\033[0m'
 
 COLORS = {
-    DEBUG: RED,
-    INFO: NOCOLOR,
+    DEBUG: NOCOLOR,
     AUTOTUNER: GREEN,
+    YASK: GREEN,
+    YASK_WARN: GREEN,
+    INFO: NOCOLOR,
     DSE: NOCOLOR,
     DSE_WARN: BLUE,
+    DLE: NOCOLOR,
+    DLE_WARN: BLUE,
     WARNING: BLUE,
     ERROR: RED,
     CRITICAL: RED
@@ -52,14 +81,20 @@ def set_log_level(level):
     Set the log level of the Devito logger.
 
     :param level: accepted values are: DEBUG, INFO, AUTOTUNER, DSE, DSE_WARN,
-                  WARNING, ERROR, CRITICAL
+                  DLE, DLE_WARN, WARNING, ERROR, CRITICAL
     """
+    if level not in logger_registry:
+        raise ValueError("Illegal logging level %s" % level)
     logger.setLevel(level)
 
 
 def set_log_noperf():
     """Do not print performance-related messages."""
     logger.setLevel(WARNING)
+
+
+configuration.add('log_level', 'INFO', list(logger_registry),
+                  lambda i: set_log_level(i))
 
 
 def log(msg, level=INFO, *args, **kwargs):
@@ -69,9 +104,9 @@ def log(msg, level=INFO, *args, **kwargs):
 
     :param msg: the message to be printed.
     :param level: accepted values are: DEBUG, INFO, AUTOTUNER, DSE, DSE_WARN,
-                  WARNING, ERROR, CRITICAL
+                  DLE, DLE_WARN, WARNING, ERROR, CRITICAL
     """
-    assert level in [DEBUG, INFO, AUTOTUNER, DSE, DSE_WARN,
+    assert level in [DEBUG, INFO, AUTOTUNER, DSE, DSE_WARN, DLE, DLE_WARN,
                      WARNING, ERROR, CRITICAL]
 
     color = COLORS[level] if sys.stdout.isatty() and sys.stderr.isatty() else '%s'
@@ -103,4 +138,27 @@ def dse(msg, *args, **kwargs):
 
 
 def dse_warning(msg, *args, **kwargs):
-    log(msg, DSE_WARN, *args, **kwargs)
+    log("DSE: %s" % msg, DSE_WARN, *args, **kwargs)
+
+
+def dle(msg, *args, **kwargs):
+    log("DLE: %s" % msg, DLE, *args, **kwargs)
+
+
+def dle_warning(msg, *args, **kwargs):
+    log("DLE: %s" % msg, DLE_WARN, *args, **kwargs)
+
+
+def yask(msg, *args, **kwargs):
+    log("YASK: %s" % msg, YASK, *args, **kwargs)
+
+
+def yask_warning(msg, *args, **kwargs):
+    log("YASK: %s" % msg, YASK_WARN, *args, **kwargs)
+
+
+@contextmanager
+def bar():
+    log('='*89, INFO)
+    yield
+    log('='*89, INFO)

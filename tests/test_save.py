@@ -1,8 +1,7 @@
 import numpy as np
 from sympy import Eq, solve, symbols
 
-from devito.interfaces import TimeData
-from devito.operator import Operator
+from devito import Operator, TimeData, Forward, x, y, time
 
 
 def initial(dx=0.01, dy=0.01):
@@ -27,20 +26,22 @@ def run_simulation(save=False, dx=0.01, dy=0.01, a=0.5, timesteps=100):
 
     u = TimeData(
         name='u', shape=(nx, ny), time_dim=timesteps, initializer=initializer,
-        time_order=1, space_order=2, save=save, pad_time=save
+        time_order=1, space_order=2, save=save
     )
 
-    a, h, s = symbols('a h s')
+    a = symbols('a')
     eqn = Eq(u.dt, a * (u.dx2 + u.dy2))
     stencil = solve(eqn, u.forward)[0]
-    op = Operator(stencils=Eq(u.forward, stencil), subs={a: 0.5, h: dx, s: dt},
-                  nt=timesteps, shape=(nx, ny), spc_border=1, time_order=1)
-    op.apply()
+    op = Operator(Eq(u.forward, stencil),
+                  subs={a: 0.5, x.spacing: dx,
+                        y.spacing: dx, time.spacing: dt},
+                  time_axis=Forward)
+    op.apply(time=timesteps)
 
     if save:
         return u.data[timesteps - 1, :]
     else:
-        return u.data[timesteps % 2, :]
+        return u.data[(timesteps+1) % 2, :]
 
 
 def test_save():

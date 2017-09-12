@@ -19,12 +19,19 @@ A section of the ``temporaries graph`` looks as follows: ::
 Temporaries graph are used for symbolic as well as loop-level transformations.
 """
 
-from collections import OrderedDict, namedtuple
+from collections import OrderedDict
+from itertools import islice
 
-from sympy import (Eq, Indexed)
+from cached_property import cached_property
+from sympy import Indexed
 
-from devito.dse.inspection import is_time_invariant, terminals
-from devito.dimension import t
+from devito.dimension import Dimension, x, y, z, t, time
+from devito.dse.extended_sympy import Eq
+from devito.dse.search import retrieve_indexed, retrieve_terminals
+from devito.dse.inspection import as_symbol
+from devito.dse.queries import q_indexed, q_indirect
+from devito.exceptions import DSEException
+from devito.tools import flatten
 
 __all__ = ['temporaries_graph']
 
@@ -43,14 +50,22 @@ class Temporary(Eq):
     def __new__(cls, lhs, rhs, **kwargs):
         reads = kwargs.pop('reads', [])
         readby = kwargs.pop('readby', [])
-        time_invariant = kwargs.pop('time_invariant', False)
-        scope = kwargs.pop('scope', 0)
         obj = super(Temporary, cls).__new__(cls, lhs, rhs, **kwargs)
         obj._reads = set(reads)
         obj._readby = set(readby)
-        obj._is_time_invariant = time_invariant
-        obj._scope = scope
         return obj
+
+    @property
+    def identifier(self):
+        return self.lhs.base.label.name if self.is_tensor else self.lhs.name
+
+    @property
+    def function(self):
+        return self.lhs.base.function
+
+    @property
+    def shape(self):
+        return self.lhs.shape if self.is_tensor else ()
 
     @property
     def reads(self):
@@ -61,24 +76,25 @@ class Temporary(Eq):
         return self._readby
 
     @property
-    def is_time_invariant(self):
-        return self._is_time_invariant
+    def is_cyclic_readby(self):
+        return self.lhs in self.readby
 
     @property
     def is_terminal(self):
-        return len(self.readby) == 0
+        return (len(self.readby) == 0) or\
+            (len(self.readby) == 1 and self.is_cyclic_readby)
 
     @property
     def is_tensor(self):
         return isinstance(self.lhs, Indexed) and self.lhs.rank > 0
 
     @property
-    def is_scalarizable(self):
-        return not self.is_terminal and self.is_tensor
+    def is_scalar(self):
+        return not self.is_tensor
 
     @property
-    def scope(self):
-        return self._scope
+    def is_dead(self):
+        return self.is_scalar and self.is_terminal and len(self.reads) == 1
 
     def construct(self, rule):
         """
@@ -87,80 +103,281 @@ class Temporary(Eq):
         """
         reads = set(self.reads) - set(rule.keys()) | set(rule.values())
         rhs = self.rhs.xreplace(rule)
-        return Temporary(self.lhs, rhs, reads=reads, readby=self.readby,
-                         time_invariant=self.is_time_invariant, scope=self.scope)
+        return Temporary(self.lhs, rhs, reads=reads, readby=self.readby)
 
     def __repr__(self):
-        return "DSE(%s, reads=%s, readby=%s)" % (super(Temporary, self).__repr__(),
-                                                 str(self.reads), str(self.readby))
+        reads = '[%s%s]' % (', '.join([str(i) for i in self.reads][:2]), '%s')
+        reads = reads % ('' if len(self.reads) <= 2 else ', ...')
+        readby = '[%s%s]' % (', '.join([str(i) for i in self.readby][:2]), '%s')
+        readby = readby % ('' if len(self.readby) <= 2 else ', ...')
+        return "Temp(key=%s, reads=%s, readby=%s)" % (self.lhs, reads, readby)
 
 
 class TemporariesGraph(OrderedDict):
 
     """
-    A temporaries graph built on top of an OrderedDict.
+    A temporaries graph represents an ordered sequence of operations.
+
+    The operations may involve scalars and indexed objects (arrays). The indices
+    of the indexed objects represent either "space" or "time" dimensions.
     """
 
-    def space_dimensions(self):
+    def __init__(self, *args, **kwargs):
+        super(TemporariesGraph, self).__init__(*args, **kwargs)
+
+        # TODO: The following need to be generalized to arbitrary dimensions,
+        # not just x, y, z, t, time
+
+        terms = [v for k, v in self.items() if v.is_tensor and not q_indirect(k)]
+
+        # Determine the indices along the space dimensions
+        candidates = [x, y, z]
+        seen = set()
+        for i in terms:
+            seen |= {j for j in i.function.indices if j in candidates}
+        self.space_indices = tuple(sorted(seen, key=lambda i: candidates.index(i)))
+
+        # Determine the shape of the tensors in the spatial dimensions
+        self.space_shape = ()
+        for i in terms:
+            if set(self.space_indices).issubset(set(i.function.indices)):
+                self.space_shape = tuple(k for k, v in zip(i.shape, i.function.indices)
+                                         if v in self.space_indices)
+                break
+
+        # Determine the indices along the time dimension
+        self.time_indices = [t, time]
+
+    def trace(self, key, readby=False, strict=False):
+        """
+        Return the sequence of operations required to compute the temporary ``key``.
+        If ``readby = True``, then return the sequence of operations that will
+        depend on ``key``, instead. With ``strict = True``, drop ``key`` from the
+        result.
+        """
+        if key not in self:
+            return []
+
+        # OrderedDicts, besides preserving the scheduling order, also prevent
+        # scheduling the same temporary more than once
+        found = OrderedDict()
+        queue = OrderedDict([(key, self[key])])
+        while queue:
+            k, v = queue.popitem(last=False)
+            reads = self.extract(k, readby=readby)
+            if set(reads).issubset(set(found.values())):
+                # All dependencies satisfied, schedulable
+                found[k] = v
+            else:
+                # Tensors belong to other traces, so they can be scheduled straight away
+                tensors = [i for i in reads if i.is_tensor]
+                found = OrderedDict(list(found.items()) + [(i.lhs, i) for i in tensors])
+                # Postpone the rest until all dependening temporaries got scheduled
+                scalars = [i for i in reads if i.is_scalar]
+                queue = OrderedDict([(i.lhs, i) for i in scalars] +
+                                    [(k, v)] + list(queue.items()))
+        if strict is True:
+            found.pop(key)
+        return tuple(found.values())
+
+    def reschedule(self, context):
+        """
+        Starting from the temporaries in ``self``, return a new sequence of
+        expressions that: ::
+
+            * includes all expressions in ``context`` not appearing in ``self``, and
+            * is ordered so that the ordering in ``context`` is honored.
+
+        Examples
+        ========
+        Assume that: ::
+
+            * ``self`` has five temporaries ``[t0, t1, t2, e1, e2]``,
+            * ``t1`` depends on the temporary ``e1``, and ``t2`` depends on ``t1``
+            * ``context = [e1, e2]``
+
+        Then the following sequence is returned ``[t0, e1, t1, t2, e2]``.
+
+        If, instead, we had had everything like before except: ::
+
+            * ``context = [t1, e1, e2]``
+
+        Then the following sequence is returned ``[t0, t1, t2, e1, e2]``.
+        That is, in the latter example the original ordering dictated by ``context``
+        was honored.
+        """
+        processed = [i.lhs for i in context]
+        queue = [i for i in self if i not in processed]
+        while queue:
+            k = queue.pop(0)
+            handle = self[k].readby
+            if all(i in processed for i in handle):
+                index = min(processed.index(i) for i in handle)
+                processed.insert(index, k)
+            else:
+                # Note: push at the back
+                queue.append(k)
+
+        processed = [self[i] for i in processed]
+
+        return processed
+
+    def time_invariant(self, expr=None):
+        """
+        Check if ``expr`` is time invariant. ``expr`` may be an expression ``e``
+        explicitly tracked by the TemporariesGraph or even a generic subexpression
+        of ``e``. If no ``expr`` is provided, then time invariance of the entire
+        TemporariesGraph is assessed.
+        """
+        if expr is None:
+            return all(self.time_invariant(v) for v in self.values())
+
+        if any(i in expr.free_symbols for i in self.time_indices):
+            return False
+        queue = [expr.rhs] if expr.is_Equality else [expr]
+        while queue:
+            item = queue.pop()
+            temporaries = []
+            for i in retrieve_terminals(item):
+                if any(j in i.free_symbols for j in self.time_indices):
+                    # Definitely not time-invariant
+                    return False
+                if i in self:
+                    # Go on with the search
+                    temporaries.append(i)
+                elif isinstance(i, Dimension):
+                    # Go on with the search, as /i/ is not a time dimension
+                    continue
+                elif not i.base.function.is_SymbolicData:
+                    # It didn't come from the outside and it's not in self, so
+                    # cannot determine if time-invariant; assume time-varying
+                    return False
+            queue.extend([self[i].rhs for i in temporaries if self[i].rhs != item])
+        return True
+
+    def is_index(self, key):
+        """
+        Return True if ``key`` is used as array index in an expression of the
+        TemporariesGraph, False otherwise.
+        """
+        if key not in self:
+            return False
+        match = key.base.label if self[key].is_tensor else key
+        for i in self.extract(key, readby=True):
+            for e in retrieve_indexed(i):
+                if any(match in idx.free_symbols for idx in e.indices):
+                    return True
+        return False
+
+    def extract(self, key, readby=False):
+        """
+        Return the list of nodes appearing in ``key.reads``, in program order
+        (ie, based on the order in which the temporaries appear in ``self``). If
+        ``readby is True``, then return instead the list of nodes appearing
+        ``key.readby``, in program order.
+
+        Examples
+        ========
+        Given the following sequence of operations: ::
+
+            t1 = ...
+            t0 = ...
+            u[i, j] = ... v ...
+            u[3, j] = ...
+            v = t0 + t1 + u[z, k]
+            t2 = ...
+
+        Assuming ``key == v`` and ``readby is False`` (as by default), return
+        the following list of :class:`Temporary` objects: ::
+
+            [t1, t0, u[i, j], u[3, j]]
+
+        If ``readby is True``, return: ::
+
+            [v, t2]
+        """
+        if key not in self:
+            return []
+        match = self[key].reads if readby is False else self[key].readby
+        found = []
+        for k, v in self.items():
+            if k in match:
+                found.append(v)
+        return found
+
+    def __getitem__(self, key):
+        if not isinstance(key, slice):
+            return super(TemporariesGraph, self).__getitem__(key)
+        offset = key.step or 0
+        try:
+            start = list(self.keys()).index(key.start) + offset
+        except ValueError:
+            start = 0
+        try:
+            stop = list(self.keys()).index(key.stop) + offset
+        except ValueError:
+            stop = None
+        return TemporariesGraph(islice(list(self.items()), start, stop))
+
+    @cached_property
+    def unknown(self):
+        """
+        Return all symbols appearing in self for which a temporary is not available.
+        """
+        known = {v.function for v in self.values()}
+        reads = set([i.base.function for i in
+                     flatten(retrieve_terminals(v.rhs) for v in self.values())])
+        return reads - known
+
+    @cached_property
+    def tensors(self):
+        """
+        Return all occurrences of the tensors in ``self`` keyed by function.
+        """
+        mapper = {}
         for v in self.values():
-            if v.is_terminal:
-                found = v.lhs.free_symbols - {t, v.lhs.base.label}
-                return tuple(sorted(found, key=lambda i: v.lhs.indices.index(i)))
-        return ()
+            handle = retrieve_indexed(v)
+            for i in handle:
+                found = mapper.setdefault(i.base.function, [])
+                if i not in found:
+                    # Not using sets to preserve order
+                    found.append(i)
+        return mapper
 
 
-class Trace(OrderedDict):
-
+def temporaries_graph(temporaries):
     """
-    Assign a depth level to each temporary in a temporary graph.
-    """
-
-    def __init__(self, root, graph, *args, **kwargs):
-        super(Trace, self).__init__(*args, **kwargs)
-        self._root = root
-        self._compute(graph)
-
-    def _compute(self, graph):
-        if self.root not in graph:
-            return
-        to_visit = [(graph[self.root], 0)]
-        while to_visit:
-            temporary, level = to_visit.pop(0)
-            self.__setitem__(temporary.lhs, level)
-            to_visit.extend([(graph[i], level + 1) for i in temporary.reads])
-
-    @property
-    def root(self):
-        return self._root
-
-    @property
-    def length(self):
-        return len(self)
-
-    def intersect(self, other):
-        return Trace(self.root, {}, [(k, v) for k, v in self.items() if k in other])
-
-    def union(self, other):
-        return Trace(self.root, {}, [(k, v) for k, v in self.items() + other.items()])
-
-
-def temporaries_graph(temporaries, scope=0):
-    """
-    Create a temporaries graph given a list of :class:`sympy.Eq`.
+    Create a dependency graph given a list of :class:`sympy.Eq`.
     """
 
+    # Check input is legal and initialize the temporaries graph
+    temporaries = [Temporary(*i.args) for i in temporaries]
+    nodes = [i.lhs for i in temporaries]
+    if len(set(nodes)) != len(nodes):
+        raise DSEException("Found redundant node in the TemporariesGraph.")
+    graph = TemporariesGraph(zip(nodes, temporaries))
+
+    # Add edges (i.e., reads and readby info) to the graph
     mapper = OrderedDict()
-    Node = namedtuple('Node', ['rhs', 'reads', 'readby', 'time_invariant'])
+    for i in nodes:
+        mapper.setdefault(as_symbol(i), []).append(i)
 
-    for lhs, rhs in [i.args for i in temporaries]:
-        reads = {i for i in terminals(rhs) if i in mapper}
-        mapper[lhs] = Node(rhs, reads, set(), is_time_invariant(rhs, mapper))
-        for i in mapper[lhs].reads:
-            assert i in mapper, "Illegal Flow"
-            mapper[i].readby.add(lhs)
+    for k, v in graph.items():
+        # Scalars
+        handle = retrieve_terminals(v.rhs)
 
-    nodes = [Temporary(k, v.rhs, reads=v.reads, readby=v.readby,
-                       time_invariant=v.time_invariant, scope=scope)
-             for k, v in mapper.items()]
+        # Tensors (does not inspect indirections such as A[B[i]])
+        for i in list(handle):
+            if q_indexed(i):
+                for idx in i.indices:
+                    handle |= retrieve_terminals(idx)
 
-    return TemporariesGraph([(i.lhs, i) for i in nodes])
+        # Derive actual reads
+        reads = set(flatten([mapper.get(as_symbol(i), []) for i in handle]))
+
+        # Propagate information
+        v.reads.update(reads)
+        for i in v.reads:
+            graph[i].readby.add(k)
+
+    return graph

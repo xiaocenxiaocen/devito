@@ -8,19 +8,27 @@ from operator import mul
 import numpy as np
 from sympy import Eq
 
-from devito.dimension import p
 from devito.logger import error
-from devito.tools import convert_dtype_to_ctype
+from devito.tools import numpy_to_ctypes
+import devito
+
+"""
+Pre-load ``libc`` to explicitly manage C memory
+"""
+libc = ctypes.CDLL(find_library('c'))
 
 
 class CMemory(object):
+
     def __init__(self, shape, dtype=np.float32, alignment=None):
         self.ndpointer, self.data_pointer = malloc_aligned(shape, alignment, dtype)
-        self.ndpointer.fill(0)
 
     def __del__(self):
         free(self.data_pointer)
         self.data_pointer = None
+
+    def fill(self, val):
+        self.ndpointer.fill(val)
 
 
 def malloc_aligned(shape, alignment=None, dtype=np.float32):
@@ -35,10 +43,9 @@ def malloc_aligned(shape, alignment=None, dtype=np.float32):
     object. The second element is the low-level reference that is
     needed only for the call to free.
     """
-    libc = ctypes.CDLL(find_library('c'))
     data_pointer = ctypes.cast(ctypes.c_void_p(), ctypes.POINTER(ctypes.c_float))
     arraysize = int(reduce(mul, shape))
-    ctype = convert_dtype_to_ctype(dtype)
+    ctype = numpy_to_ctypes(dtype)
     if alignment is None:
         alignment = libc.getpagesize()
 
@@ -64,7 +71,6 @@ def free(internal_pointer):
     """Use the C function free to free the memory allocated for the
     given pointer.
     """
-    libc = ctypes.CDLL(find_library('c'))
     libc.free(internal_pointer)
 
 
@@ -72,31 +78,6 @@ def first_touch(array):
     """Uses the Propagator low-level API to initialize the given array(in Devito types)
     in the same pattern that would later be used to access it.
     """
-    from devito.propagator import Propagator
-    from devito.interfaces import TimeData, PointData
-    from devito.iteration import Iteration
-
     exp_init = [Eq(array.indexed[array.indices], 0)]
-    it_init = []
-    if isinstance(array, TimeData):
-        shape = array.shape
-        time_steps = shape[0]
-        shape = shape[1:]
-        space_dims = array.indices[1:]
-    else:
-        if isinstance(array, PointData):
-            it_init = [Iteration(exp_init, dimension=p, limits=array.shape[1])]
-            exp_init = []
-            time_steps = array.shape[0]
-            shape = []
-            space_dims = []
-        else:
-            shape = array.shape
-            time_steps = 1
-            space_dims = array.indices
-    prop = Propagator(name="init", nt=time_steps, shape=shape,
-                      stencils=exp_init, space_dims=space_dims)
-    prop.add_devito_param(array)
-    prop.save_vars[array.name] = True
-    prop.time_loop_stencils_a = it_init
-    prop.run([array.data])
+    op = devito.Operator(exp_init)
+    op.apply()
