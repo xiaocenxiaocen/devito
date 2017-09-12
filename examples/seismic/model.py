@@ -30,6 +30,17 @@ def demo_model(preset, **kwargs):
 
         return Model(vp=vp, origin=origin, shape=shape,
                      spacing=spacing, nbpml=nbpml, **kwargs)
+    elif preset.lower() in ['bench']:
+        # A constant single-layer model in a 2D or 3D domain
+        # with velocity 1.5km/s.
+        shape = kwargs.pop('shape', (101, 101))
+        spacing = kwargs.pop('spacing', tuple([10. for _ in shape]))
+        origin = kwargs.pop('origin', tuple([0. for _ in shape]))
+        nbpml = kwargs.pop('nbpml', 10)
+        vp = kwargs.pop('vp', 1.5)
+
+        return ModelBench(vp=vp, origin=origin, shape=shape,
+                          spacing=spacing, nbpml=nbpml, **kwargs)
 
     elif preset.lower() in ['layers', 'twolayer', '2layer']:
         # A two-layer model in a 2D or 3D domain with two different
@@ -126,7 +137,6 @@ def damp_boundary(damp, nbpml, spacing):
             damp[:, -(i + 1), :] += val/spacing[1]
             damp[:, :, i] += val/spacing[2]
             damp[:, :, -(i + 1)] += val/spacing[2]
-
 
 class Model(object):
     """The physical model used in seismic inversion processes.
@@ -287,3 +297,22 @@ class Model(object):
         :param data : Data array to be padded"""
         pad_list = [(self.nbpml, self.nbpml) for _ in self.shape]
         return np.pad(data, pad_list, 'edge')
+
+
+class ModelBench(Model):
+    """
+    Physical model used for accuracy benchmarking,
+    all is the same as a model except the critical dt
+    made small enough to ignore
+    time discretization errors
+    """
+
+    @property
+    def critical_dt(self):
+        """Critical computational time step value from the CFL condition."""
+        # For a fixed time order this number goes down as the space order increases.
+        #
+        # The CFL condtion is then given by
+        # dt <= coeff * h / (max(velocity))
+        coeff = 0.38 if len(self.shape) == 3 else 0.42
+        return coeff *1 / (self.scale*np.max(self.vp))
