@@ -3,7 +3,7 @@ import os
 
 from devito import DenseData, ConstantData
 from devito.logger import error
-
+from examples.pickle import Pickleable
 
 __all__ = ['Model', 'demo_model']
 
@@ -128,7 +128,7 @@ def damp_boundary(damp, nbpml, spacing):
             damp[:, :, -(i + 1)] += val/spacing[2]
 
 
-class Model(object):
+class Model(Pickleable):
     """The physical model used in seismic inversion processes.
 
     :param origin: Origin of the model in m as a tuple in (x,y,z) order
@@ -148,6 +148,7 @@ class Model(object):
     :param m: The square slowness of the wave
     :param damp: The damping field for absorbing boundarycondition
     """
+    _pickled = ['origin', 'spacing', 'shape', 'vp', 'nbpml', 'dtype', 'epsilon', 'delta', 'theta', 'phi']
     def __init__(self, origin, spacing, shape, vp, nbpml=20, dtype=np.float32,
                  epsilon=None, delta=None, theta=None, phi=None):
         self.origin = origin
@@ -287,3 +288,4 @@ class Model(object):
         :param data : Data array to be padded"""
         pad_list = [(self.nbpml, self.nbpml) for _ in self.shape]
         return np.pad(data, pad_list, 'edge')
+

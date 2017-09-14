@@ -25,6 +25,7 @@ class PointSource(PointData):
 
     def __new__(cls, name, ntime=None, npoint=None, ndim=None,
                 data=None, coordinates=None, **kwargs):
+        print("new called")
         p_dim = kwargs.get('dimension', Dimension('p_%s' % name))
         ndim = ndim or coordinates.shape[1]
         npoint = npoint or coordinates.shape[0]
@@ -49,6 +50,10 @@ class PointSource(PointData):
         if not self._cached():
             super(PointSource, self).__init__(*args, **kwargs)
 
+    #def __getnewargs__(self):
+    #    print("get new args called")
+    #    return (self.name, self.data.shape[0], self.data.shape[1], self.coordinates.shape[1], self.data, self.coordinates.data)
+
 
 Receiver = PointSource
 Shot = PointSource
@@ -66,6 +71,7 @@ class WaveletSource(PointSource):
     """
 
     def __new__(cls, *args, **kwargs):
+        print(cls)
         time = kwargs.get('time')
         npoint = kwargs.get('npoint', 1)
         kwargs['ntime'] = len(time)
@@ -108,6 +114,12 @@ class WaveletSource(PointSource):
         plt.tick_params()
         plt.show()
 
+    def __reduce__(self):
+        return new_wavelet_source, (self.__class__, [], {'time': self.time, 'npoint': self.npoint, 'f0': self.f0}), None
+
+def new_wavelet_source(cls, args, kwargs):
+    print(kwargs)
+    return cls.__new__(*args, **kwargs)
 
 class RickerSource(WaveletSource):
     """
