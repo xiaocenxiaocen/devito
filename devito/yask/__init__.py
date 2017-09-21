@@ -82,7 +82,7 @@ yask_configuration = Parameters('YASK-Configuration')
 yask_configuration.add('compiler', YaskCompiler())
 yask_configuration.add('python-exec', False, [False, True])
 # Set the Instruction Set Architecture used by the YASK code generator
-isa, ISAs = 'cpp', ['cpp', 'avx', 'avx2', 'avx512', 'knc']
+isa, ISAs = 'avx2', ['cpp', 'avx', 'avx2', 'avx512', 'knc']
 yask_configuration.add('isa', isa, ISAs)
 # Currently YASK also require the CPU architecture (e.g., snb for sandy bridge,
 # hsw for haswell, etc.). At the moment, we simply infer it from the ISA
@@ -105,7 +105,7 @@ def reset_yask_isa(develop_mode):
             break
     yask_configuration['isa'] = isa
     yask_configuration['arch'] = arch_mapper[isa]
-yask_configuration.add('develop-mode', True, [False, True], reset_yask_isa)
+yask_configuration.add('develop-mode', False, [False, True], reset_yask_isa)
 
 configuration.add('yask', yask_configuration)
 
